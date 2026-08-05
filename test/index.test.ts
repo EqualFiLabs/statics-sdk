@@ -87,6 +87,7 @@ import {
   staticsDollarTokenAbi,
   staticsLendingErrorAbi,
   staticsPositionErrorAbi,
+  staticsPositionPortfolioAbi,
   staticsRewardsErrorAbi,
   staticsSwapFeeHookAbi,
   staticsTestnetFaucetAbi,
@@ -763,6 +764,30 @@ describe("Statics unified calldata", () => {
         ),
       ).toBe(true);
     }
+    for (const functionName of [
+      "positionPortfolioCounts",
+      "basketIdsOfPosition",
+      "loanIdsOfPosition",
+      "liquidityPositionIdsOfPosition",
+      "globalRewardAssetsOfPosition",
+      "riskSeriesIdsOfPosition",
+    ]) {
+      expect(
+        staticsAbi.some(
+          (entry) => entry.type === "function" && entry.name === functionName,
+        ),
+      ).toBe(true);
+      expect(
+        staticsPositionPortfolioAbi.some(
+          (entry) => entry.type === "function" && entry.name === functionName,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      staticsAbi.some(
+        (entry) => entry.type === "function" && entry.name === "recoveryGracePeriod",
+      ),
+    ).toBe(true);
     for (const functionName of [
       "positionCount",
       "positionsOfOwner",
