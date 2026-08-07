@@ -16,13 +16,16 @@ import {
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
   buildClearCanonicalPoolFeeConfigurationCall,
+  buildClearProtocolPoolFeeConfigurationCall,
   buildClaimRewardsCall,
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
   buildCreateAndStakeCall,
   buildCreatePositionCall,
   buildCreateBasketTransaction,
+  buildCreateGovernancePoolCall,
   buildDecommissionBasketCall,
+  buildDecommissionGovernancePoolCall,
   buildDepositETHTransaction,
   buildErc20PermitTypedData,
   buildIncreaseStakedLiquidityCall,
@@ -47,6 +50,9 @@ import {
   buildSetPositionCreationFeeCall,
   buildSetPositionRendererCall,
   buildSetCanonicalPoolFeeConfigurationCall,
+  buildSetProtocolPoolFeeConfigurationCall,
+  buildQuoteGovernancePoolCall,
+  buildReplaceLiquidityManagerCall,
   buildStakeLiquidityPositionCall,
   buildTestnetFaucetClaimCall,
   buildUnstakeLiquidityPositionCall,
@@ -57,6 +63,7 @@ import {
   buildV4ExactInputSingleSwap,
   decodePositionInfo,
   effectiveCanonicalFees,
+  encodeSqrtPriceBPerAX96,
   encodeSqrtPriceAssetPerBasketX96,
   getSqrtPriceAtTick,
   pendingLpFees,
@@ -87,9 +94,11 @@ import {
   staticsDollarRiskTokenAbi,
   staticsDollarTokenAbi,
   staticsLendingErrorAbi,
+  staticsLiquidityManagerAbi,
   staticsPositionErrorAbi,
   staticsPositionPortfolioAbi,
   staticsPositionPortfolioErrorAbi,
+  staticsProtocolPoolErrorAbi,
   staticsRewardsErrorAbi,
   staticsSwapFeeHookAbi,
   staticsTestnetFaucetAbi,
@@ -265,6 +274,95 @@ describe("Statics static basket quotes", () => {
       lpFeeBps: 0n,
       inputFeeBps: 25n,
       outputFeeBps: 25n,
+    });
+  });
+
+  it("encodes governed protocol pool administration and generic manager calls", () => {
+    const poolId = `0x${"11".repeat(32)}` as const;
+    const manager = "0x0000000000000000000000000000000000000006";
+    const governanceParams = {
+      tokenA: assetA,
+      tokenB: assetB,
+      sqrtPriceBPerAX96: encodeSqrtPriceBPerAX96(1n, 1n),
+      amountAMax: 100n,
+      amountBMax: 200n,
+      minLiquidity: 1n,
+      payer: receiver,
+      deadline: 7_200n,
+    };
+    expect(governanceParams.sqrtPriceBPerAX96).toBe(Q96);
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuoteGovernancePoolCall(governanceParams) }).functionName)
+      .toBe("quoteGovernancePool");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildCreateGovernancePoolCall(governanceParams) }).functionName)
+      .toBe("createGovernancePool");
+
+    const configuration = {
+      inputFeeBps: 40n,
+      outputFeeBps: 60n,
+      polShareBps: 1_000n,
+      liquidityProviderShareBps: 2_500n,
+      basketStakerShareBps: 2_500n,
+      staticsStakerShareBps: 1_500n,
+      treasuryShareBps: 2_500n,
+    };
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildSetProtocolPoolFeeConfigurationCall(poolId, configuration),
+    })).toEqual({
+      functionName: "setProtocolPoolFeeConfiguration",
+      args: [poolId, {
+        inputFeeBps: 40,
+        outputFeeBps: 60,
+        polShareBps: 1_000,
+        liquidityProviderShareBps: 2_500,
+        basketStakerShareBps: 2_500,
+        staticsStakerShareBps: 1_500,
+        treasuryShareBps: 2_500,
+      }],
+    });
+    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
+      ...configuration,
+      treasuryShareBps: 2_499n,
+    })).toThrow("pool fee shares must sum to 10000 BPS");
+    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
+      ...configuration,
+      inputFeeBps: 101n,
+      outputFeeBps: 100n,
+    })).toThrow("combined pool fee rate exceeds 200 BPS");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClearProtocolPoolFeeConfigurationCall(poolId) }).functionName)
+      .toBe("clearProtocolPoolFeeConfiguration");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGovernancePoolCall(poolId) }).functionName)
+      .toBe("decommissionGovernancePool");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
+      .toBe("replaceLiquidityManager");
+
+    const managerData = encodeFunctionData({
+      abi: staticsLiquidityManagerAbi,
+      functionName: "mintUserPosition",
+      args: [{
+        poolKey: { currency0: assetA, currency1: assetB, fee: 0, tickSpacing: 10, hooks: receiver },
+        tickLower: -887_270,
+        tickUpper: 887_270,
+        liquidity: 1n,
+        amount0Limit: 10n,
+        amount1Limit: 10n,
+        deadline: 7_200n,
+      }, receiver, receiver],
+    });
+    expect(decodeFunctionData({ abi: staticsLiquidityManagerAbi, data: managerData }).functionName)
+      .toBe("mintUserPosition");
+  });
+
+  it("decodes governed protocol pool errors", () => {
+    const poolId = `0x${"22".repeat(32)}` as const;
+    const data = encodeErrorResult({
+      abi: staticsProtocolPoolErrorAbi,
+      errorName: "ProtocolPoolAlreadyRegistered",
+      args: [poolId, 2],
+    });
+    expect(decodeErrorResult({ abi: staticsProtocolPoolErrorAbi, data })).toMatchObject({
+      errorName: "ProtocolPoolAlreadyRegistered",
+      args: [poolId, 2],
     });
   });
 
