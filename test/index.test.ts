@@ -305,7 +305,27 @@ describe("Statics static basket quotes", () => {
     expect(decodeFunctionData({
       abi: staticsAbi,
       data: buildSetProtocolPoolFeeConfigurationCall(poolId, configuration),
-    }).functionName).toBe("setProtocolPoolFeeConfiguration");
+    })).toEqual({
+      functionName: "setProtocolPoolFeeConfiguration",
+      args: [poolId, {
+        inputFeeBps: 40,
+        outputFeeBps: 60,
+        polShareBps: 1_000,
+        liquidityProviderShareBps: 2_500,
+        basketStakerShareBps: 2_500,
+        staticsStakerShareBps: 1_500,
+        treasuryShareBps: 2_500,
+      }],
+    });
+    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
+      ...configuration,
+      treasuryShareBps: 2_499n,
+    })).toThrow("pool fee shares must sum to 10000 BPS");
+    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
+      ...configuration,
+      inputFeeBps: 101n,
+      outputFeeBps: 100n,
+    })).toThrow("combined pool fee rate exceeds 200 BPS");
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClearProtocolPoolFeeConfigurationCall(poolId) }).functionName)
       .toBe("clearProtocolPoolFeeConfiguration");
     expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGovernancePoolCall(poolId) }).functionName)

@@ -1869,41 +1869,28 @@ export function buildDecommissionBasketCall(basketId: bigint): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "decommissionBasket", args: [basketId] });
 }
 
-export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfiguration): Hex {
-  const uint16 = (value: bigint, field: string): number => {
-    if (value < 0n || value > 65_535n) throw new Error(`${field} exceeds uint16`);
-    return Number(value);
-  };
-  return encodeFunctionData({
-    abi: staticsAbi,
-    functionName: "setSwapFeeConfiguration",
-    args: [{
-      inputFeeBps: uint16(configuration.inputFeeBps, "inputFeeBps"),
-      outputFeeBps: uint16(configuration.outputFeeBps, "outputFeeBps"),
-      polShareBps: uint16(configuration.polShareBps, "polShareBps"),
-      liquidityProviderShareBps: uint16(
-        configuration.liquidityProviderShareBps,
-        "liquidityProviderShareBps",
-      ),
-      basketStakerShareBps: uint16(configuration.basketStakerShareBps, "basketStakerShareBps"),
-      staticsStakerShareBps: uint16(configuration.staticsStakerShareBps, "staticsStakerShareBps"),
-      treasuryShareBps: uint16(configuration.treasuryShareBps, "treasuryShareBps"),
-    }],
-  });
+function toUint16(value: bigint, field: string): number {
+  if (value < 0n || value > 65_535n) throw new Error(`${field} exceeds uint16`);
+  return Number(value);
 }
 
-export function buildSetCanonicalPoolFeeConfigurationCall(
-  basketId: bigint,
-  asset: Address,
-  configuration: SwapFeeConfiguration,
-): Hex {
-  const uint16 = (value: bigint, field: string): number => {
-    if (value < 0n || value > 65_535n) throw new Error(`${field} exceeds uint16`);
-    return Number(value);
+function coerceSwapFeeConfiguration(configuration: SwapFeeConfiguration) {
+  return {
+    inputFeeBps: toUint16(configuration.inputFeeBps, "inputFeeBps"),
+    outputFeeBps: toUint16(configuration.outputFeeBps, "outputFeeBps"),
+    polShareBps: toUint16(configuration.polShareBps, "polShareBps"),
+    liquidityProviderShareBps: toUint16(
+      configuration.liquidityProviderShareBps,
+      "liquidityProviderShareBps",
+    ),
+    basketStakerShareBps: toUint16(configuration.basketStakerShareBps, "basketStakerShareBps"),
+    staticsStakerShareBps: toUint16(configuration.staticsStakerShareBps, "staticsStakerShareBps"),
+    treasuryShareBps: toUint16(configuration.treasuryShareBps, "treasuryShareBps"),
   };
-  if (
-    configuration.inputFeeBps + configuration.outputFeeBps > 200n
-  ) {
+}
+
+function validatedPoolFeeConfiguration(configuration: SwapFeeConfiguration) {
+  if (configuration.inputFeeBps + configuration.outputFeeBps > 200n) {
     throw new Error("combined pool fee rate exceeds 200 BPS");
   }
   if (
@@ -1913,18 +1900,26 @@ export function buildSetCanonicalPoolFeeConfigurationCall(
   ) {
     throw new Error("pool fee shares must sum to 10000 BPS");
   }
+  return coerceSwapFeeConfiguration(configuration);
+}
+
+export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfiguration): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "setSwapFeeConfiguration",
+    args: [coerceSwapFeeConfiguration(configuration)],
+  });
+}
+
+export function buildSetCanonicalPoolFeeConfigurationCall(
+  basketId: bigint,
+  asset: Address,
+  configuration: SwapFeeConfiguration,
+): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
     functionName: "setCanonicalPoolFeeConfiguration",
-    args: [basketId, asset, {
-      inputFeeBps: uint16(configuration.inputFeeBps, "inputFeeBps"),
-      outputFeeBps: uint16(configuration.outputFeeBps, "outputFeeBps"),
-      polShareBps: uint16(configuration.polShareBps, "polShareBps"),
-      liquidityProviderShareBps: uint16(configuration.liquidityProviderShareBps, "liquidityProviderShareBps"),
-      basketStakerShareBps: uint16(configuration.basketStakerShareBps, "basketStakerShareBps"),
-      staticsStakerShareBps: uint16(configuration.staticsStakerShareBps, "staticsStakerShareBps"),
-      treasuryShareBps: uint16(configuration.treasuryShareBps, "treasuryShareBps"),
-    }],
+    args: [basketId, asset, validatedPoolFeeConfiguration(configuration)],
   });
 }
 
@@ -1948,32 +1943,10 @@ export function buildSetProtocolPoolFeeConfigurationCall(
   poolId: Hex,
   configuration: SwapFeeConfiguration,
 ): Hex {
-  const uint16 = (value: bigint, field: string): number => {
-    if (value < 0n || value > 65_535n) throw new Error(`${field} exceeds uint16`);
-    return Number(value);
-  };
-  if (configuration.inputFeeBps + configuration.outputFeeBps > 200n) {
-    throw new Error("combined pool fee rate exceeds 200 BPS");
-  }
-  if (
-    configuration.polShareBps + configuration.liquidityProviderShareBps
-      + configuration.basketStakerShareBps + configuration.staticsStakerShareBps
-      + configuration.treasuryShareBps !== BPS
-  ) {
-    throw new Error("pool fee shares must sum to 10000 BPS");
-  }
   return encodeFunctionData({
     abi: staticsAbi,
     functionName: "setProtocolPoolFeeConfiguration",
-    args: [poolId, {
-      inputFeeBps: uint16(configuration.inputFeeBps, "inputFeeBps"),
-      outputFeeBps: uint16(configuration.outputFeeBps, "outputFeeBps"),
-      polShareBps: uint16(configuration.polShareBps, "polShareBps"),
-      liquidityProviderShareBps: uint16(configuration.liquidityProviderShareBps, "liquidityProviderShareBps"),
-      basketStakerShareBps: uint16(configuration.basketStakerShareBps, "basketStakerShareBps"),
-      staticsStakerShareBps: uint16(configuration.staticsStakerShareBps, "staticsStakerShareBps"),
-      treasuryShareBps: uint16(configuration.treasuryShareBps, "treasuryShareBps"),
-    }],
+    args: [poolId, validatedPoolFeeConfiguration(configuration)],
   });
 }
 
