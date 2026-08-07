@@ -926,6 +926,9 @@ export const staticsPositionPortfolioAbi = parseAbi([
   "function liquidityPositionIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] tokenIds,uint256 nextCursor)",
   "function globalRewardAssetsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (address[] assets,uint256 nextCursor)",
   "function riskSeriesIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] seriesIds,uint256 nextCursor)",
+]);
+
+export const staticsPositionPortfolioErrorAbi = parseAbi([
   "error InvalidPortfolioPageSize(uint256 requested,uint256 maximum)",
 ]);
 

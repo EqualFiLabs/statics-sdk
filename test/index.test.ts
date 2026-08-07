@@ -64,6 +64,7 @@ import {
   planMintUnderlyingRoutes,
   positionSalt,
   LOAN_RECOVERY_GRACE_PERIOD,
+  POSITION_PORTFOLIO_MAX_PAGE_SIZE,
   Q128,
   Q96,
   quoteBorrow,
@@ -88,6 +89,7 @@ import {
   staticsLendingErrorAbi,
   staticsPositionErrorAbi,
   staticsPositionPortfolioAbi,
+  staticsPositionPortfolioErrorAbi,
   staticsRewardsErrorAbi,
   staticsSwapFeeHookAbi,
   staticsTestnetFaucetAbi,
@@ -783,6 +785,24 @@ describe("Statics unified calldata", () => {
         ),
       ).toBe(true);
     }
+    expect(POSITION_PORTFOLIO_MAX_PAGE_SIZE).toBe(100n);
+    expect(
+      staticsPositionPortfolioAbi.every((entry) => entry.type === "function"),
+    ).toBe(true);
+    const portfolioPageError = encodeErrorResult({
+      abi: staticsPositionPortfolioErrorAbi,
+      errorName: "InvalidPortfolioPageSize",
+      args: [101n, POSITION_PORTFOLIO_MAX_PAGE_SIZE],
+    });
+    expect(
+      decodeErrorResult({
+        abi: staticsPositionPortfolioErrorAbi,
+        data: portfolioPageError,
+      }),
+    ).toMatchObject({
+      errorName: "InvalidPortfolioPageSize",
+      args: [101n, POSITION_PORTFOLIO_MAX_PAGE_SIZE],
+    });
     expect(
       staticsAbi.some(
         (entry) => entry.type === "function" && entry.name === "recoveryGracePeriod",
