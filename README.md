@@ -5,7 +5,7 @@ single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.
 
 `splitSwapFee` mirrors the bilateral swap-fee split across permanent liquidity,
-activated canonical LPs, deposited BasketToken positions, global Statics
+activated protocol-pool LPs, deposited BasketToken positions, global Statics
 stakers, and treasury. Treasury receives division dust; unavailable LP,
 basket-staker, and Statics-staker allocations independently redirect to
 permanent liquidity.
@@ -90,7 +90,7 @@ The SDK never selects a venue, hardcodes a router, or submits transactions.
 Lifecycle helpers expose quarantine, release, and permanent decommissioning;
 `allowsExposureIncrease` maps the basket status to user-facing action gating.
 
-## Canonical liquidity
+## Protocol liquidity
 
 The package exports the Diamond liquidity and global-reward ABI plus hook,
 manager, PositionManager, and StateView fragments.
@@ -99,10 +99,22 @@ constituent-per-BasketToken square-root price, paired-asset amount, and measured
 complete input cap per constituent, plus a launch deadline. Prices are ratios of
 raw smallest token units, not decimal-normalized display units. Use
 `encodeSqrtPriceAssetPerBasketX96(assetAmountRaw, basketAmountRaw)` to construct
-them. The creation transaction initializes, manager-registers, backs, and
+them. The creation transaction registers, initializes, backs, and
 permanently seeds every canonical pool. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
+
+Timelocked governance can create an unrelated protocol pool between any two
+compatible ERC-20s with `buildCreateGovernancePoolCall`. Use
+`encodeSqrtPriceBPerAX96` for its raw token-B-per-token-A price and simulate
+`quoteGovernancePool` through `staticsAbi` before constructing the timelock
+proposal. The payer approves the Diamond; registration, initialization, exact
+funding, and permanent seeding remain atomic.
+
+`protocolPool(poolId)` normalizes basket canonical and governance-created
+pools. The PoolId fee builders work for either class. Governance pools have no
+basket reward book, and `buildDecommissionGovernancePoolCall` performs their
+irreversible treasury recovery without touching user LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Governance
 uses the Diamond for fee configuration. Reward and treasury distribution,
@@ -144,8 +156,10 @@ penalty, and splits the realized penalty 20% to the caller and 80% to the
 protocol route. Onchain quotes remain authoritative.
 
 User-selected LP positions are ordinary PositionManager NFTs created by the
-installed manager. Their position state can be read from PositionManager and
-StateView, although canonical pools currently have zero native LP fee.
+installed manager. The generic manager validates their exact PoolKey against
+the Diamond's protocol-pool registry. Their position state can be read from
+PositionManager and StateView; both pool classes currently have zero native LP
+fee.
 Qualifying full-range NFTs can be staked into the Diamond with the exported
 builders, activated in the next block, increased in place, claimed, and
 unstaked without a cooldown. `borrowAndProvideLiquidity` origin is not required.

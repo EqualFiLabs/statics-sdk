@@ -1,7 +1,7 @@
 {
   "name": "@statics-protocol/sdk",
   "version": "0.1.0",
-  "description": "Quotes, calldata builders, and constituent-only routing interfaces for Statics",
+  "description": "Quotes, calldata builders, and protocol pool interfaces for Statics",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
