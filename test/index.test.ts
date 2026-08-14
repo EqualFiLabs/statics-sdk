@@ -107,6 +107,8 @@ import {
   staticsRewardsErrorAbi,
   staticsSwapFeeHookAbi,
   staticsGenesisAbi,
+  staticsGenesisErrorAbi,
+  staticsProtocolRevenueErrorAbi,
   staticsTokenAbi,
   staticsTestnetFaucetAbi,
   staticsTokenErrorAbi,
@@ -1138,6 +1140,10 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(staticsTokenAbi.some((entry) => entry.type === "function" && entry.name === "FIXED_SUPPLY"))
       .toBe(true);
+    expect(decodeErrorResult({ abi: staticsGenesisErrorAbi, data: encodeErrorResult({ abi: staticsGenesisErrorAbi, errorName: "GenesisLinkedOnTransfer", args: [7n, 9n] }) }).errorName)
+      .toBe("GenesisLinkedOnTransfer");
+    expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoRevenue", args: [receiver, assetA] }) }).errorName)
+      .toBe("NoRevenue");
   });
 
   it("encodes canonical LP custody, activation, increase, claim, and exit calls", () => {

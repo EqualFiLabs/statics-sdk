@@ -1407,6 +1407,28 @@ export const staticsRewardsErrorAbi = parseAbi([
   "error InvalidMaturitySchedule(uint40 eligibleAt)",
 ]);
 
+export const staticsGenesisErrorAbi = parseAbi([
+  "error GenesisOwnerMismatch(uint256 genesisId,address expected,address actual)",
+  "error PositionOwnerMismatch(uint256 positionId,address expected,address actual)",
+  "error UnauthorizedGenesisCollection(address caller)",
+  "error ActivationBurnExceedsMaximum(uint256 required,uint256 maximum)",
+  "error GenesisAlreadyLinked(uint256 genesisId,uint256 positionId)",
+  "error PositionAlreadyLinked(uint256 positionId,uint256 genesisId)",
+  "error GenesisNotLinked(uint256 genesisId)",
+  "error GenesisLinkedOnTransfer(uint256 genesisId,uint256 positionId)",
+  "error InvalidActivationTier(uint8 currentTier,uint8 targetTier)",
+  "error InvalidActivationCost(uint256 cost)",
+]);
+
+export const staticsProtocolRevenueErrorAbi = parseAbi([
+  "error InvalidReceiver()",
+  "error NoRevenue(address account,address asset)",
+  "error MinimumOutputNotMet(address asset,uint256 actual,uint256 minimum)",
+  "error IncompatibleRevenueAsset(address asset,uint256 expected,uint256 spent,uint256 received)",
+  "error InvalidPartnerTip(uint16 tipBps)",
+  "error InvalidPartnerRecipient(address recipient)",
+]);
+
 export const staticsTokenErrorAbi = parseAbi([
   "error ERC20InsufficientBalance(address sender,uint256 balance,uint256 needed)",
   "error ERC20InvalidSender(address sender)",
