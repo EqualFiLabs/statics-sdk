@@ -17,6 +17,9 @@ The stock Doppler Multicurve initializer assigns 5% of fees earned by its
 launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
 fee receiver. The exported share constants and module bindings describe that
 standard beneficiary path; no separate post-swap fee module is involved.
+Receiver attribution is monotonic, allowing an NFT transfer to checkpoint fees
+already harvested for the distributor without moving or calling either reward
+token inside the ERC-721 transfer hook.
 
 `DOPPLER_GENESIS_FIXTURE` is deliberately marked `productionApproved: false`.
 Its four curves allocate 50%, 25%, 24%, and 1% of the 800 million-token public
