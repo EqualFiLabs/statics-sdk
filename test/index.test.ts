@@ -12,6 +12,8 @@ import {
   allowsExposureIncrease,
   BasketStatus,
   buildActivateLiquidityPositionCall,
+  buildActivateGenesisCall,
+  buildAccrueGenesisLaunchRewardsCall,
   buildBorrowAndProvideLiquidityCall,
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
@@ -20,10 +22,13 @@ import {
   buildClaimRewardsCall,
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
+  buildClaimGenesisLaunchRewardsCall,
+  buildClaimOwnerGenesisLaunchRewardsCall,
   buildCreateAndStakeCall,
   buildCreatePositionCall,
   buildCreateBasketTransaction,
   buildCreateGovernancePoolCall,
+  buildBuyGenesisTransaction,
   buildDecommissionBasketCall,
   buildDecommissionGovernancePoolCall,
   buildDepositETHTransaction,
@@ -35,6 +40,7 @@ import {
   buildMintPeggedWithPermitCall,
   buildMintV4PositionCall,
   buildQuoteMintPeggedAndRecombineCall,
+  buildRegisterGenesisCall,
   buildOptInRewardAssetsCall,
   buildOptOutRewardAssetsCall,
   buildPermit2ApproveCall,
@@ -42,6 +48,7 @@ import {
   buildQuoteV4ExactInputSingleCall,
   buildApproveV4PositionCall,
   buildRedeemPeggedCall,
+  buildRedeemGenesisCall,
   buildRedeemPeggedWithPermitCall,
   buildRecoverCall,
   buildRepayCall,
@@ -67,15 +74,22 @@ import {
   buildRecombineToETHWithPermitCall,
   buildV4ExactInputSingleSwap,
   decodePositionInfo,
+  cumulativeGenesisActivationCost,
+  DOPPLER_GENESIS_FIXTURE,
   effectiveCanonicalFees,
   encodeSqrtPriceBPerAX96,
   encodeSqrtPriceAssetPerBasketX96,
   getSqrtPriceAtTick,
+  getDopplerGenesisModules,
   pendingLpFees,
   maximumLiquidityForAmounts,
   planMintUnderlyingRoutes,
   positionSalt,
   LOAN_RECOVERY_GRACE_PERIOD,
+  GENESIS_COLLECTION_SIZE,
+  GENESIS_FULL_BACKING,
+  GENESIS_SUPPLY_RESIDUAL,
+  GENESIS_VAULT_PRICE,
   POSITION_PORTFOLIO_MAX_PAGE_SIZE,
   Q128,
   Q96,
@@ -91,6 +105,12 @@ import {
   selectFeeShares,
   splitSwapFee,
   staticsAbi,
+  genesisActivationRegistryAbi,
+  genesisLaunchDistributorAbi,
+  staticsGenesisVaultAbi,
+  STATICS_DOPPLER_INVENTORY,
+  STATICS_MAX_SUPPLY,
+  STATICS_TREASURY_ALLOCATION,
   staticsBasketErrorAbi,
   staticsCollateralErrorAbi,
   staticsDollarCoreAbi,
@@ -147,6 +167,79 @@ const snapshot: BasketSnapshot = {
     { asset: assetB, bundleAmount: 5n * 10n ** 18n, vaultBalance: 50n * 10n ** 18n },
   ],
 };
+
+describe("standalone Statics Genesis", () => {
+  it("conserves the fixed token and paired Genesis supplies", () => {
+    expect(STATICS_TREASURY_ALLOCATION + STATICS_DOPPLER_INVENTORY).toBe(STATICS_MAX_SUPPLY);
+    expect(GENESIS_FULL_BACKING).toBe(GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE);
+    expect(GENESIS_SUPPLY_RESIDUAL).toBe(10n * 10n ** 18n);
+  });
+
+  it("exports the four-curve nonproduction Doppler fixture", () => {
+    expect(DOPPLER_GENESIS_FIXTURE.productionApproved).toBe(false);
+    expect(DOPPLER_GENESIS_FIXTURE.curves).toHaveLength(4);
+    expect(DOPPLER_GENESIS_FIXTURE.curves.reduce((sum, curve) => sum + curve.shareWad, 0n)).toBe(10n ** 18n);
+    expect(DOPPLER_GENESIS_FIXTURE.curves.reduce((sum, curve) => sum + curve.staticsAmount, 0n)).toBe(
+      STATICS_DOPPLER_INVENTORY,
+    );
+    expect(DOPPLER_GENESIS_FIXTURE.curves.reduce((sum, curve) => sum + curve.numPositions, 0)).toBe(44);
+  });
+
+  it("selects only explicitly supported Doppler module sets", () => {
+    expect(getDopplerGenesisModules(4_663).airlock.toLowerCase()).toBe(
+      "0xeb7c034704ef8dcd2d32324c1545f62fb4ad0862",
+    );
+    expect(getDopplerGenesisModules(84_532).rehype.toLowerCase()).toBe(
+      "0xadb90ef4dc001cfb81ecaded2cdbda7d18487606",
+    );
+    expect(() => getDopplerGenesisModules(1)).toThrow("unsupported Doppler Genesis chain");
+  });
+
+  it("builds vault acquisition and redemption transactions", () => {
+    const purchase = buildBuyGenesisTransaction(42n, receiver, 3_000_000_000_000_000n);
+    expect(purchase.value).toBe(3_000_000_000_000_000n);
+    expect(decodeFunctionData({ abi: staticsGenesisVaultAbi, data: purchase.data })).toEqual({
+      functionName: "buyGenesis",
+      args: [42n, receiver],
+    });
+    expect(decodeFunctionData({ abi: staticsGenesisVaultAbi, data: buildRedeemGenesisCall(42n, receiver) })).toEqual({
+      functionName: "redeemGenesis",
+      args: [42n, receiver],
+    });
+    expect(() => buildBuyGenesisTransaction(42n, receiver, -1n)).toThrow("cannot be negative");
+  });
+
+  it("builds activation, registration, accrual, and launch claim calls", () => {
+    expect(decodeFunctionData({ abi: genesisActivationRegistryAbi, data: buildActivateGenesisCall(42n, 3) })).toEqual({
+      functionName: "activate",
+      args: [42n, 3],
+    });
+    expect(decodeFunctionData({ abi: genesisLaunchDistributorAbi, data: buildRegisterGenesisCall(42n) })).toEqual({
+      functionName: "registerGenesis",
+      args: [42n],
+    });
+    expect(decodeFunctionData({ abi: genesisLaunchDistributorAbi, data: buildAccrueGenesisLaunchRewardsCall() })).toEqual({
+      functionName: "accrue",
+      args: undefined,
+    });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimGenesisLaunchRewardsCall(42n, assetA, receiver),
+    })).toEqual({ functionName: "claimGenesis", args: [42n, assetA, receiver] });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimOwnerGenesisLaunchRewardsCall(assetA, receiver),
+    })).toEqual({ functionName: "claimOwnerRewards", args: [assetA, receiver] });
+  });
+
+  it("sums sequential activation costs", () => {
+    const costs = [0n, 10_000n, 20_000n, 30_000n, 40_000n];
+    expect(cumulativeGenesisActivationCost(costs, 0, 4)).toBe(100_000n);
+    expect(cumulativeGenesisActivationCost(costs, 2, 4)).toBe(70_000n);
+    expect(() => cumulativeGenesisActivationCost(costs, 3, 3)).toThrow("above the current tier");
+    expect(() => cumulativeGenesisActivationCost([0n, 1n], 0, 2)).toThrow("missing or invalid");
+  });
+});
 
 describe("Statics static basket quotes", () => {
   it("splits seven-way hook fees with the protocol fallback routes", () => {

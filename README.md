@@ -4,6 +4,29 @@ This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.
 
+## Standalone Genesis launch
+
+The SDK also exposes the standalone Genesis contracts that launch before the
+full Diamond: the fixed 1 billion-supply Doppler ERC-20, the 5,555-token Genesis
+collection and fixed-price vault, the permanent activation registry and fee
+receiver, and the temporary launch reward distributor. The exported calldata
+builders cover Genesis acquisition, redemption, activation, registration, and
+both NFT-owned and crystallized previous-owner reward claims.
+
+`DOPPLER_GENESIS_FIXTURE` is deliberately marked `productionApproved: false`.
+Its four curves allocate 50%, 25%, 24%, and 1% of the 800 million-token public
+inventory across 44 Multicurve positions. It exists for fork testing and launch
+simulation; it is not an approved production price curve. The exported Doppler
+module addresses are integration dependencies, not deployed Statics contract
+addresses. Production Statics addresses must come from a finalized deployment
+manifest.
+
+The fixed accounting constants distinguish the 200 million-token treasury
+allocation from the 800 million-token Doppler inventory. All 5,555 Genesis NFTs
+start in the vault, each representing a fixed 180,018 STATICS redemption claim.
+The resulting 999,999,990-token full backing leaves the intentional 10 STATICS
+paired-supply residual described by the Genesis ADR.
+
 `splitSwapFee` mirrors the bilateral swap-fee split across locked liquidity,
 activated protocol-pool LPs, deposited BasketToken positions, global Statics
 stakers, StonkBrokers, index creators, and treasury. Treasury receives division

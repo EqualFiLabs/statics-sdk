@@ -23,6 +23,180 @@ export const Q192 = 1n << 192n;
 export const MAX_UINT256 = (1n << 256n) - 1n;
 export const MIN_TICK = -887_272;
 export const MAX_TICK = 887_272;
+export const STATICS_MAX_SUPPLY = 1_000_000_000n * 10n ** 18n;
+export const STATICS_TREASURY_ALLOCATION = 200_000_000n * 10n ** 18n;
+export const STATICS_DOPPLER_INVENTORY = 800_000_000n * 10n ** 18n;
+export const GENESIS_COLLECTION_SIZE = 5_555n;
+export const GENESIS_VAULT_PRICE = 180_018n * 10n ** 18n;
+export const GENESIS_FULL_BACKING = GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE;
+export const GENESIS_SUPPLY_RESIDUAL = STATICS_MAX_SUPPLY - GENESIS_FULL_BACKING;
+
+export type DopplerGenesisCurve = {
+  name: "low" | "medium" | "high" | "filler";
+  tickLower: number;
+  tickUpper: number;
+  numPositions: number;
+  shareWad: bigint;
+  staticsAmount: bigint;
+};
+
+export const DOPPLER_GENESIS_FIXTURE = {
+  productionApproved: false,
+  sdkRevision: "daa12c19d849f41ec5126168055935b143948c54",
+  contractsRevision: "86a5200456b148c156d2eb81a893747dd601c3ca",
+  tickSpacing: 100,
+  farTick: -83_100,
+  curves: [
+    { name: "low", tickLower: -887_200, tickUpper: -142_200, numPositions: 11, shareWad: 500_000_000_000_000_000n, staticsAmount: 400_000_000n * 10n ** 18n },
+    { name: "medium", tickLower: -222_200, tickUpper: -116_300, numPositions: 11, shareWad: 250_000_000_000_000_000n, staticsAmount: 200_000_000n * 10n ** 18n },
+    { name: "high", tickLower: -176_200, tickUpper: -84_100, numPositions: 11, shareWad: 240_000_000_000_000_000n, staticsAmount: 192_000_000n * 10n ** 18n },
+    { name: "filler", tickLower: -84_100, tickUpper: -83_000, numPositions: 11, shareWad: 10_000_000_000_000_000n, staticsAmount: 8_000_000n * 10n ** 18n },
+  ] as const satisfies readonly DopplerGenesisCurve[],
+} as const;
+
+export const dopplerGenesisModules = {
+  4_663: {
+    airlock: "0xeB7c034704eF8dCd2d32324C1545f62fb4aD0862",
+    tokenFactory: "0x1B37D3a72082029c44b35B604eA473617580b69A",
+    governanceFactory: "0xDB036746d65dD52126b1915F1Adf555E6C5237Cf",
+    poolInitializer: "0x4E3468951D49f2eeA976ed0d6e75FfCB44a9a544",
+    noOpMigrator: "0xBA2F330EDb16CD8056F5988D8CE19bBc63475a0E",
+    rehype: "0x5F9eB5f6726Fe88D5e39867967F5B833D2fA3215",
+  },
+  84_532: {
+    airlock: "0x3411306cE66c9469BFf1535BA955503c4BDE1C6E",
+    tokenFactory: "0x89C261c05B5F9B6bCbA07C199B8DeE7CFaD45292",
+    governanceFactory: "0x0902e7C7207dF8ED6303aef4382bCAb181B5fbfA",
+    poolInitializer: "0xBDF938149aC6a781f94FaA0eD45E6A0E984c6544",
+    noOpMigrator: "0xF11066ABBd329aC4BbA39455340539322C222EB0",
+    rehype: "0xAdb90eF4dc001cFB81ECAdeD2CDbDa7D18487606",
+  },
+} as const satisfies Record<number, Record<string, Address>>;
+
+export function getDopplerGenesisModules(chainId: number) {
+  const modules = dopplerGenesisModules[chainId as keyof typeof dopplerGenesisModules];
+  if (!modules) throw new Error(`unsupported Doppler Genesis chain: ${chainId}`);
+  return modules;
+}
+
+export const staticsGenesisAbi = parseAbi([
+  "function COLLECTION_SIZE() view returns (uint256)",
+  "function mintedSupply() view returns (uint256)",
+  "function vault() view returns (address)",
+  "function activationRegistry() view returns (address)",
+  "function protocol() view returns (address)",
+  "function launchFinalized() view returns (bool)",
+  "function contractURI() view returns (string)",
+  "function externalURLBase() view returns (string)",
+  "function owner() view returns (address)",
+  "function pendingOwner() view returns (address)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function getApproved(uint256 tokenId) view returns (address)",
+  "function isApprovedForAll(address owner, address operator) view returns (bool)",
+  "function approve(address to, uint256 tokenId)",
+  "function setApprovalForAll(address operator, bool approved)",
+  "function transferFrom(address from, address to, uint256 tokenId)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "function locked(uint256 genesisId) view returns (bool)",
+  "function royaltyInfo(uint256 tokenId, uint256 salePrice) view returns (address receiver, uint256 royaltyAmount)",
+  "function getTransferValidator() view returns (address validator)",
+  "function getTransferValidationFunction() pure returns (bytes4 functionSignature, bool isViewFunction)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+  "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
+  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
+  "event ProtocolBound(address indexed protocol)",
+  "event MetadataUpdate(uint256 _tokenId)",
+  "event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId)",
+  "event Locked(uint256 tokenId)",
+  "event Unlocked(uint256 tokenId)",
+]);
+
+export const staticsGenesisVaultAbi = parseAbi([
+  "function buyGenesis(uint256 tokenId, address receiver) payable",
+  "function redeemGenesis(uint256 tokenId, address receiver)",
+  "function quoteGenesisPurchase() view returns (uint256 staticsPrice, uint256 nativeFee)",
+  "function vaultPrice() view returns (uint256)",
+  "function nativeAcquisitionFee() view returns (uint256)",
+  "function nativeFeeRecipient() view returns (address)",
+  "function claimableNativeFees(address recipient) view returns (uint256)",
+  "function totalNativeFeeLiability() view returns (uint256)",
+  "function circulatingGenesis() view returns (uint256)",
+  "function vaultInventory() view returns (uint256)",
+  "function requiredBacking() view returns (uint256)",
+  "function isVaultInventory(uint256 tokenId) view returns (bool)",
+  "function vaultAccounting() view returns ((uint256 vaultPrice, uint256 maximumSupply, uint256 mintedSupply, uint256 vaultInventory, uint256 circulatingGenesis, uint256 tokenBacking, uint256 requiredBacking, uint256 tokenCustody) accounting)",
+  "event GenesisPurchased(address indexed payer, address indexed receiver, uint256 indexed tokenId, uint256 staticsPrice, uint256 nativeFee)",
+  "event GenesisRedeemed(address indexed owner, address indexed receiver, uint256 indexed tokenId, uint256 price)",
+]);
+
+export const genesisActivationRegistryAbi = parseAbi([
+  "function genesisCollection() view returns (address)",
+  "function tierOf(uint256 genesisId) view returns (uint8)",
+  "function multiplierBps(uint256 genesisId) view returns (uint16)",
+  "function tierCost(uint8 tier) view returns (uint256)",
+  "function activeConsumer() view returns (address)",
+  "function pendingConsumer() view returns (address)",
+  "function activate(uint256 genesisId, uint8 targetTier) returns (uint256 burned)",
+  "event GenesisActivated(uint256 indexed genesisId, uint8 previousTier, uint8 newTier, uint256 staticsBurned)",
+  "event GenesisActivationReset(uint256 indexed genesisId, address indexed previousOwner, address indexed nextOwner)",
+  "event TierCostUpdated(uint8 indexed tier, uint256 previousCost, uint256 newCost)",
+]);
+
+export const staticsFeeReceiverAbi = parseAbi([
+  "function statics() view returns (address)",
+  "function numeraire() view returns (address)",
+  "function poolId() view returns (bytes32)",
+  "function activeDistributor() view returns (address)",
+  "function pendingDistributor() view returns (address)",
+  "function cumulativeHarvested(address asset) view returns (uint256)",
+  "function distributorClaimable(address distributor, address asset) view returns (uint256)",
+  "function totalDistributorLiability(address asset) view returns (uint256)",
+  "function harvest() returns (uint256 staticsAmount, uint256 numeraireAmount)",
+  "function claimDistributorFees(address asset, address receiver) returns (uint256 amount)",
+  "event MarketBound(address indexed statics, address indexed numeraire, bytes32 indexed poolId)",
+  "event FeesHarvested(address indexed distributor, address indexed asset, uint256 amount, uint256 cumulativeAmount)",
+  "event DistributorProposed(address indexed currentDistributor, address indexed pendingDistributor)",
+  "event DistributorAccepted(address indexed previousDistributor, address indexed newDistributor)",
+]);
+
+export const genesisLaunchDistributorAbi = parseAbi([
+  "function registerGenesis(uint256 genesisId)",
+  "function accrue() returns (uint256 staticsAmount, uint256 numeraireAmount)",
+  "function claimGenesis(uint256 genesisId, address asset, address receiver) returns (uint256 amount)",
+  "function claimOwnerRewards(address asset, address receiver) returns (uint256 amount)",
+  "function pendingGenesis(uint256 genesisId, address asset) view returns (uint256 amount)",
+  "function registered(uint256 genesisId) view returns (bool)",
+  "function effectiveWeight(uint256 genesisId) view returns (uint256)",
+  "function ownerClaimable(address owner, address asset) view returns (uint256)",
+  "function genesisRewardShareBps() view returns (uint16)",
+  "function totalWeight() view returns (uint256)",
+  "function finalized() view returns (bool)",
+  "function rewardBook(address asset) view returns ((uint256 indexRay, uint256 indexRemainder, uint256 indexedAmount, uint256 crystallizedAmount, uint256 totalClaimable, uint256 totalClaimed, uint256 treasuryClaimable) book)",
+  "event GenesisRegistered(uint256 indexed genesisId, uint256 weight, uint256 totalWeight)",
+  "event GenesisWeightChanged(uint256 indexed genesisId, uint256 previousWeight, uint256 newWeight, uint256 totalWeight)",
+  "event RevenueAccrued(address indexed asset, uint256 amount, uint256 genesisAmount, uint256 treasuryAmount, uint256 indexRay)",
+  "event GenesisRewardsClaimed(uint256 indexed genesisId, address indexed owner, address indexed asset, address receiver, uint256 amount)",
+  "event OwnerRewardsClaimed(address indexed owner, address indexed asset, address indexed receiver, uint256 amount)",
+]);
+
+export const dopplerStaticsTokenAbi = parseAbi([
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+  "function nonces(address owner) view returns (uint256)",
+  "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
+  "function burn(uint256 amount)",
+  "function tokenURI() view returns (string)",
+]);
 
 export const BasketStatus = {
   Active: 0,
@@ -1601,6 +1775,96 @@ export const staticsDollarErrorAbi = parseAbi([
   "error UnexpectedRiskIngressState()",
   "error NativeTransferFailed(address receiver,uint256 amount)",
 ]);
+
+export function buildBuyGenesisTransaction(
+  tokenId: bigint,
+  receiver: Address,
+  nativeFee: bigint,
+): PreparedTransaction {
+  if (nativeFee < 0n) throw new Error("native Genesis acquisition fee cannot be negative");
+  return {
+    data: encodeFunctionData({
+      abi: staticsGenesisVaultAbi,
+      functionName: "buyGenesis",
+      args: [tokenId, receiver],
+    }),
+    value: nativeFee,
+  };
+}
+
+export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex {
+  return encodeFunctionData({
+    abi: staticsGenesisVaultAbi,
+    functionName: "redeemGenesis",
+    args: [tokenId, receiver],
+  });
+}
+
+export function buildActivateGenesisCall(genesisId: bigint, targetTier: number): Hex {
+  if (!Number.isInteger(targetTier) || targetTier < 1 || targetTier > 4) {
+    throw new Error("Genesis target tier must be an integer from 1 through 4");
+  }
+  return encodeFunctionData({
+    abi: genesisActivationRegistryAbi,
+    functionName: "activate",
+    args: [genesisId, targetTier],
+  });
+}
+
+export function buildRegisterGenesisCall(genesisId: bigint): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "registerGenesis",
+    args: [genesisId],
+  });
+}
+
+export function buildClaimGenesisLaunchRewardsCall(
+  genesisId: bigint,
+  asset: Address,
+  receiver: Address,
+): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "claimGenesis",
+    args: [genesisId, asset, receiver],
+  });
+}
+
+export function buildClaimOwnerGenesisLaunchRewardsCall(asset: Address, receiver: Address): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "claimOwnerRewards",
+    args: [asset, receiver],
+  });
+}
+
+export function buildAccrueGenesisLaunchRewardsCall(): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "accrue",
+  });
+}
+
+export function cumulativeGenesisActivationCost(
+  tierCosts: readonly bigint[],
+  currentTier: number,
+  targetTier: number,
+): bigint {
+  if (!Number.isInteger(currentTier) || currentTier < 0 || currentTier > 3) {
+    throw new Error("Genesis current tier must be an integer from 0 through 3");
+  }
+  if (!Number.isInteger(targetTier) || targetTier <= currentTier || targetTier > 4) {
+    throw new Error("Genesis target tier must be above the current tier and no greater than 4");
+  }
+  let total = 0n;
+  for (let tier = currentTier + 1; tier <= targetTier; tier += 1) {
+    const cost = tierCosts[tier];
+    if (cost === undefined || cost < 0n) throw new Error(`missing or invalid Genesis tier ${tier} cost`);
+    total += cost;
+  }
+  return total;
+}
 
 export function buildCreateBasketTransaction(
   params: CreateBasketParams,
