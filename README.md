@@ -13,6 +13,11 @@ receiver, and the temporary launch reward distributor. The exported calldata
 builders cover Genesis acquisition, redemption, activation, registration, and
 both NFT-owned and crystallized previous-owner reward claims.
 
+The stock Doppler Multicurve initializer assigns 5% of fees earned by its
+launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
+fee receiver. The exported share constants and module bindings describe that
+standard beneficiary path; no separate post-swap fee module is involved.
+
 `DOPPLER_GENESIS_FIXTURE` is deliberately marked `productionApproved: false`.
 Its four curves allocate 50%, 25%, 24%, and 1% of the 800 million-token public
 inventory across 44 Multicurve positions. It exists for fork testing and launch

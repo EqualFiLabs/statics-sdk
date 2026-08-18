@@ -75,6 +75,7 @@ import {
   buildV4ExactInputSingleSwap,
   decodePositionInfo,
   cumulativeGenesisActivationCost,
+  DOPPLER_OWNER_FEE_SHARE,
   DOPPLER_GENESIS_FIXTURE,
   effectiveCanonicalFees,
   encodeSqrtPriceBPerAX96,
@@ -109,6 +110,7 @@ import {
   genesisLaunchDistributorAbi,
   staticsGenesisVaultAbi,
   STATICS_DOPPLER_INVENTORY,
+  STATICS_FEE_RECEIVER_SHARE,
   STATICS_MAX_SUPPLY,
   STATICS_TREASURY_ALLOCATION,
   staticsBasketErrorAbi,
@@ -186,11 +188,13 @@ describe("standalone Statics Genesis", () => {
   });
 
   it("selects only explicitly supported Doppler module sets", () => {
+    expect(DOPPLER_OWNER_FEE_SHARE + STATICS_FEE_RECEIVER_SHARE).toBe(10n ** 18n);
+    expect(STATICS_FEE_RECEIVER_SHARE).toBe(950_000_000_000_000_000n);
     expect(getDopplerGenesisModules(4_663).airlock.toLowerCase()).toBe(
       "0xeb7c034704ef8dcd2d32324c1545f62fb4ad0862",
     );
-    expect(getDopplerGenesisModules(84_532).rehype.toLowerCase()).toBe(
-      "0xadb90ef4dc001cfb81ecaded2cdbda7d18487606",
+    expect(getDopplerGenesisModules(84_532).poolInitializer.toLowerCase()).toBe(
+      "0xbdf938149ac6a781f94faa0ed45e6a0e984c6544",
     );
     expect(() => getDopplerGenesisModules(1)).toThrow("unsupported Doppler Genesis chain");
   });

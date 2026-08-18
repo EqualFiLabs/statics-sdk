@@ -26,6 +26,8 @@ export const MAX_TICK = 887_272;
 export const STATICS_MAX_SUPPLY = 1_000_000_000n * 10n ** 18n;
 export const STATICS_TREASURY_ALLOCATION = 200_000_000n * 10n ** 18n;
 export const STATICS_DOPPLER_INVENTORY = 800_000_000n * 10n ** 18n;
+export const DOPPLER_OWNER_FEE_SHARE = 5n * 10n ** 16n;
+export const STATICS_FEE_RECEIVER_SHARE = 95n * 10n ** 16n;
 export const GENESIS_COLLECTION_SIZE = 5_555n;
 export const GENESIS_VAULT_PRICE = 180_018n * 10n ** 18n;
 export const GENESIS_FULL_BACKING = GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE;
@@ -61,7 +63,6 @@ export const dopplerGenesisModules = {
     governanceFactory: "0xDB036746d65dD52126b1915F1Adf555E6C5237Cf",
     poolInitializer: "0x4E3468951D49f2eeA976ed0d6e75FfCB44a9a544",
     noOpMigrator: "0xBA2F330EDb16CD8056F5988D8CE19bBc63475a0E",
-    rehype: "0x5F9eB5f6726Fe88D5e39867967F5B833D2fA3215",
   },
   84_532: {
     airlock: "0x3411306cE66c9469BFf1535BA955503c4BDE1C6E",
@@ -69,7 +70,6 @@ export const dopplerGenesisModules = {
     governanceFactory: "0x0902e7C7207dF8ED6303aef4382bCAb181B5fbfA",
     poolInitializer: "0xBDF938149aC6a781f94FaA0eD45E6A0E984c6544",
     noOpMigrator: "0xF11066ABBd329aC4BbA39455340539322C222EB0",
-    rehype: "0xAdb90eF4dc001cFB81ECAdeD2CDbDa7D18487606",
   },
 } as const satisfies Record<number, Record<string, Address>>;
 
@@ -148,6 +148,7 @@ export const genesisActivationRegistryAbi = parseAbi([
 export const staticsFeeReceiverAbi = parseAbi([
   "function statics() view returns (address)",
   "function numeraire() view returns (address)",
+  "function poolInitializer() view returns (address)",
   "function poolId() view returns (bytes32)",
   "function activeDistributor() view returns (address)",
   "function pendingDistributor() view returns (address)",
