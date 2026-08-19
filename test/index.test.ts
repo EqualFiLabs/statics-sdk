@@ -12,7 +12,6 @@ import {
   allowsExposureIncrease,
   BasketStatus,
   buildActivateLiquidityPositionCall,
-  buildActivateGenesisCall,
   buildAccrueGenesisLaunchRewardsCall,
   buildBorrowAndProvideLiquidityCall,
   buildBorrowAndStakeLiquidityCall,

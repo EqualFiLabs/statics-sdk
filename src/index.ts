@@ -82,6 +82,8 @@ export function getDopplerGenesisModules(chainId: number) {
 
 export const staticsGenesisAbi = parseAbi([
   "function COLLECTION_SIZE() view returns (uint256)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
   "function mintedSupply() view returns (uint256)",
   "function vault() view returns (address)",
   "function activationRegistry() view returns (address)",
@@ -106,6 +108,7 @@ export const staticsGenesisAbi = parseAbi([
   "function getTransferValidator() view returns (address validator)",
   "function getTransferValidationFunction() pure returns (bytes4 functionSignature, bool isViewFunction)",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+  "event ConsecutiveTransfer(uint256 indexed fromTokenId,uint256 toTokenId,address indexed fromAddress,address indexed toAddress)",
   "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
   "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
   "event ProtocolBound(address indexed protocol)",
@@ -1256,27 +1259,6 @@ export const staticsSwapFeeHookAbi = parseAbi([
   "event PoolFeeConfigurationCleared(bytes32 indexed poolId)",
 ]);
 
-export const staticsGenesisAbi = parseAbi([
-  "function COLLECTION_SIZE() view returns (uint256)",
-  "function name() view returns (string)",
-  "function symbol() view returns (string)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function ownerOf(uint256 tokenId) view returns (address)",
-  "function tokenURI(uint256 tokenId) view returns (string)",
-  "function getApproved(uint256 tokenId) view returns (address)",
-  "function isApprovedForAll(address owner,address operator) view returns (bool)",
-  "function approve(address to,uint256 tokenId)",
-  "function setApprovalForAll(address operator,bool approved)",
-  "function safeTransferFrom(address from,address to,uint256 tokenId)",
-  "function protocol() view returns (address)",
-  "event ConsecutiveTransfer(uint256 indexed fromTokenId,uint256 toTokenId,address indexed fromAddress,address indexed toAddress)",
-  "event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)",
-  "event Approval(address indexed owner,address indexed approved,uint256 indexed tokenId)",
-  "event ApprovalForAll(address indexed owner,address indexed operator,bool approved)",
-  "event MetadataUpdate(uint256 tokenId)",
-  "event BatchMetadataUpdate(uint256 fromTokenId,uint256 toTokenId)",
-]);
-
 export const staticsTokenAbi = parseAbi([
   "function FIXED_SUPPLY() view returns (uint256)",
   "function name() view returns (string)",
@@ -1809,9 +1791,22 @@ export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex 
   });
 }
 
-export function buildActivateGenesisCall(genesisId: bigint, targetTier: number): Hex {
+export function buildActivateGenesisCall(genesisId: bigint, targetTier: number): Hex;
+export function buildActivateGenesisCall(genesisId: bigint, targetTier: number, maxBurn: bigint): Hex;
+export function buildActivateGenesisCall(
+  genesisId: bigint,
+  targetTier: number,
+  maxBurn?: bigint,
+): Hex {
   if (!Number.isInteger(targetTier) || targetTier < 1 || targetTier > 4) {
-    throw new Error("Genesis target tier must be an integer from 1 through 4");
+    throw new Error("target Genesis tier must be between 1 and 4");
+  }
+  if (maxBurn !== undefined) {
+    return encodeFunctionData({
+      abi: staticsAbi,
+      functionName: "activateGenesis",
+      args: [genesisId, targetTier, maxBurn],
+    });
   }
   return encodeFunctionData({
     abi: genesisActivationRegistryAbi,
@@ -2324,17 +2319,6 @@ export function buildLinkGenesisCall(genesisId: bigint, positionId: bigint): Hex
 
 export function buildUnlinkGenesisCall(genesisId: bigint): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "unlinkGenesis", args: [genesisId] });
-}
-
-export function buildActivateGenesisCall(genesisId: bigint, targetTier: number, maxBurn: bigint): Hex {
-  if (!Number.isInteger(targetTier) || targetTier < 1 || targetTier > 4) {
-    throw new Error("target Genesis tier must be between 1 and 4");
-  }
-  return encodeFunctionData({
-    abi: staticsAbi,
-    functionName: "activateGenesis",
-    args: [genesisId, targetTier, maxBurn],
-  });
 }
 
 export function buildClaimCreatorRevenueCall(asset: Address, receiver: Address, minReceived: bigint): Hex {
