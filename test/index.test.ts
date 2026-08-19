@@ -137,6 +137,7 @@ import {
   permit2AllowanceAbi,
   universalRouterAbi,
   v4QuoterAbi,
+  v4PoolId,
   v4PositionManagerReadAbi,
   type BasketSnapshot,
   type Permit2PermitSingle,
@@ -1384,6 +1385,79 @@ describe("Statics unified calldata", () => {
       parseAbiParameters("address currency,uint256 minimumAmount"),
       actionParams[2],
     )).toEqual([basketToken, 95n]);
+  });
+
+  it("builds reviewed native-input and native-output router plans", () => {
+    const poolKey = {
+      currency0: assetA,
+      currency1: basketToken,
+      fee: 3_000,
+      tickSpacing: 100,
+      hooks: receiver,
+    };
+    expect(v4PoolId(poolKey)).toMatch(/^0x[0-9a-f]{64}$/);
+
+    const nativeInput = buildV4ExactInputSingleSwap({
+      router: receiver,
+      poolKey,
+      zeroForOne: true,
+      amountIn: 100n,
+      amountOutMinimum: 95n,
+      deadline: 1_700_001_200n,
+      settlement: { input: "native", output: "erc20", wrappedNative: assetA },
+    });
+    expect(nativeInput.value).toBe(100n);
+    const decodedInput = decodeFunctionData({ abi: universalRouterAbi, data: nativeInput.calldata });
+    expect(decodedInput.args[0]).toBe("0x0b10");
+    expect(decodeAbiParameters(
+      parseAbiParameters("address recipient,uint256 amount"),
+      decodedInput.args[1][0],
+    )).toEqual(["0x0000000000000000000000000000000000000002", 100n]);
+    const [inputActions, inputParams] = decodeAbiParameters(
+      parseAbiParameters("bytes actions,bytes[] params"),
+      decodedInput.args[1][1],
+    );
+    expect(inputActions).toBe("0x060b0f");
+    expect(decodeAbiParameters(
+      parseAbiParameters("address currency,uint256 amount,bool payerIsUser"),
+      inputParams[1],
+    )).toEqual([assetA, 100n, false]);
+
+    const nativeOutput = buildV4ExactInputSingleSwap({
+      router: receiver,
+      poolKey,
+      zeroForOne: false,
+      amountIn: 100n,
+      amountOutMinimum: 95n,
+      deadline: 1_700_001_200n,
+      settlement: { input: "erc20", output: "native", wrappedNative: assetA },
+    });
+    expect(nativeOutput.value).toBe(0n);
+    const decodedOutput = decodeFunctionData({ abi: universalRouterAbi, data: nativeOutput.calldata });
+    expect(decodedOutput.args[0]).toBe("0x100c");
+    const [outputActions, outputParams] = decodeAbiParameters(
+      parseAbiParameters("bytes actions,bytes[] params"),
+      decodedOutput.args[1][0],
+    );
+    expect(outputActions).toBe("0x060c0e");
+    expect(decodeAbiParameters(
+      parseAbiParameters("address currency,address recipient,uint256 amount"),
+      outputParams[2],
+    )).toEqual([assetA, "0x0000000000000000000000000000000000000002", 0n]);
+    expect(decodeAbiParameters(
+      parseAbiParameters("address recipient,uint256 amountMinimum"),
+      decodedOutput.args[1][1],
+    )).toEqual(["0x0000000000000000000000000000000000000001", 95n]);
+
+    expect(() => buildV4ExactInputSingleSwap({
+      router: receiver,
+      poolKey,
+      zeroForOne: true,
+      amountIn: 100n,
+      amountOutMinimum: 95n,
+      deadline: 1_700_001_200n,
+      settlement: { input: "native", output: "erc20", wrappedNative: basketToken },
+    })).toThrow("native input must be the configured wrapped-native pool currency");
   });
 
   it("rejects a Permit2 signature for a different swap authority", () => {

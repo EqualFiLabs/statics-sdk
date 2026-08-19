@@ -1,6 +1,7 @@
 import {
   encodeAbiParameters,
   encodeFunctionData,
+  keccak256,
   parseAbi,
   parseAbiParameters,
   toHex,
@@ -402,6 +403,10 @@ export type V4ExactInputSingleRequest = {
     permitSingle: Permit2PermitSingle;
     signature: Hex;
   };
+  settlement?:
+    | { input: "erc20"; output: "erc20" }
+    | { input: "native"; output: "erc20"; wrappedNative: Address }
+    | { input: "erc20"; output: "native"; wrappedNative: Address };
 };
 
 export type PeggedMintAndRecombineQuote = {
@@ -1313,6 +1318,7 @@ export const v4PositionManagerReadAbi = parseAbi([
 export const v4StateViewReadAbi = parseAbi([
   "function poolManager() view returns (address)",
   "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96,int24 tick,uint24 protocolFee,uint24 lpFee)",
+  "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
   "function getPositionInfo(bytes32 poolId,address owner,int24 tickLower,int24 tickUpper,bytes32 salt) view returns (uint128 liquidity,uint256 feeGrowthInside0LastX128,uint256 feeGrowthInside1LastX128)",
   "function getFeeGrowthInside(bytes32 poolId,int24 tickLower,int24 tickUpper) view returns (uint256 feeGrowthInside0X128,uint256 feeGrowthInside1X128)",
 ]);
@@ -1990,6 +1996,17 @@ export function buildQuoteV4ExactInputSingleCall(
   });
 }
 
+export function v4PoolId(poolKey: V4PoolKey): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      parseAbiParameters(
+        "(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)",
+      ),
+      [poolKey],
+    ),
+  );
+}
+
 export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest): SwapExecution {
   _validateUint128(request.amountIn, "swap input amount");
   _validateUint128(request.amountOutMinimum, "minimum swap output");
@@ -1998,8 +2015,26 @@ export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest):
   const outputCurrency = request.zeroForOne ? request.poolKey.currency1 : request.poolKey.currency0;
   const hookData = request.hookData ?? "0x";
   const minHopPriceX36 = request.minHopPriceX36 ?? 0n;
+  const settlement = request.settlement ?? { input: "erc20", output: "erc20" };
+  const nativeInput = settlement.input === "native";
+  const nativeOutput = settlement.output === "native";
+  if (nativeInput && nativeOutput) throw new Error("a single-hop swap cannot use native input and output");
+  if (nativeInput && settlement.wrappedNative.toLowerCase() !== inputCurrency.toLowerCase()) {
+    throw new Error("native input must be the configured wrapped-native pool currency");
+  }
+  if (nativeOutput && settlement.wrappedNative.toLowerCase() !== outputCurrency.toLowerCase()) {
+    throw new Error("native output must be the configured wrapped-native pool currency");
+  }
+  if (nativeInput && request.permit) throw new Error("native input cannot include a Permit2 permit");
 
-  const actions = toHex(new Uint8Array([0x06, 0x0c, 0x0f]));
+  const msgSender = "0x0000000000000000000000000000000000000001" as Address;
+  const routerAddress = "0x0000000000000000000000000000000000000002" as Address;
+
+  const actions = toHex(
+    new Uint8Array(
+      nativeInput ? [0x06, 0x0b, 0x0f] : nativeOutput ? [0x06, 0x0c, 0x0e] : [0x06, 0x0c, 0x0f],
+    ),
+  );
   const params = [
     encodeAbiParameters(
       parseAbiParameters(
@@ -2014,22 +2049,50 @@ export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest):
         hookData,
       }],
     ),
-    encodeAbiParameters(
-      parseAbiParameters("address currency,uint256 amount"),
-      [inputCurrency, request.amountIn],
-    ),
-    encodeAbiParameters(
-      parseAbiParameters("address currency,uint256 minimumAmount"),
-      [outputCurrency, request.amountOutMinimum],
-    ),
+    nativeInput
+      ? encodeAbiParameters(
+          parseAbiParameters("address currency,uint256 amount,bool payerIsUser"),
+          [inputCurrency, request.amountIn, false],
+        )
+      : encodeAbiParameters(
+          parseAbiParameters("address currency,uint256 amount"),
+          [inputCurrency, request.amountIn],
+        ),
+    nativeOutput
+      ? encodeAbiParameters(
+          parseAbiParameters("address currency,address recipient,uint256 amount"),
+          [outputCurrency, routerAddress, 0n],
+        )
+      : encodeAbiParameters(
+          parseAbiParameters("address currency,uint256 minimumAmount"),
+          [outputCurrency, request.amountOutMinimum],
+        ),
   ];
   const swapPlan = encodeAbiParameters(
     parseAbiParameters("bytes actions,bytes[] params"),
     [actions, params],
   );
 
-  let commands = toHex(new Uint8Array([0x10]));
-  let inputs = [swapPlan];
+  let commands = toHex(
+    new Uint8Array(nativeInput ? [0x0b, 0x10] : nativeOutput ? [0x10, 0x0c] : [0x10]),
+  );
+  let inputs = nativeInput
+    ? [
+        encodeAbiParameters(
+          parseAbiParameters("address recipient,uint256 amount"),
+          [routerAddress, request.amountIn],
+        ),
+        swapPlan,
+      ]
+    : nativeOutput
+      ? [
+          swapPlan,
+          encodeAbiParameters(
+            parseAbiParameters("address recipient,uint256 amountMinimum"),
+            [msgSender, request.amountOutMinimum],
+          ),
+        ]
+      : [swapPlan];
   if (request.permit) {
     const { permitSingle, signature } = request.permit;
     _validatePermit2Permit(permitSingle);
@@ -2042,7 +2105,7 @@ export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest):
     if (permitSingle.details.amount !== request.amountIn) {
       throw new Error("Permit2 amount must equal the swap input amount");
     }
-    commands = toHex(new Uint8Array([0x0a, 0x10]));
+    commands = toHex(new Uint8Array(nativeOutput ? [0x0a, 0x10, 0x0c] : [0x0a, 0x10]));
     inputs = [
       encodeAbiParameters(
         parseAbiParameters(
@@ -2051,6 +2114,14 @@ export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest):
         [permitSingle, signature],
       ),
       swapPlan,
+      ...(nativeOutput
+        ? [
+            encodeAbiParameters(
+              parseAbiParameters("address recipient,uint256 amountMinimum"),
+              [msgSender, request.amountOutMinimum],
+            ),
+          ]
+        : []),
     ];
   }
 
@@ -2061,7 +2132,7 @@ export function buildV4ExactInputSingleSwap(request: V4ExactInputSingleRequest):
       functionName: "execute",
       args: [commands, inputs, request.deadline],
     }),
-    value: 0n,
+    value: nativeInput ? request.amountIn : 0n,
   };
 }
 
