@@ -18,7 +18,6 @@ if (!existsSync(manifestUrl)) {
   console.log("Robinhood manifest not supplied; retaining the committed generated binding");
   process.exit(0);
 }
-
 const manifest = JSON.parse(readFileSync(manifestUrl, "utf8"));
 
 const contract = (name) => {
