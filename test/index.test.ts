@@ -31,6 +31,7 @@ import {
   buildCreatePositionCall,
   buildCreateBasketTransaction,
   buildBuyGenesisTransaction,
+  buildDonateGenesisReserveTransaction,
   buildDecommissionBasketCall,
   buildDepositETHTransaction,
   buildErc20PermitTypedData,
@@ -108,6 +109,10 @@ import {
   GENESIS_FULL_BACKING,
   GENESIS_SUPPLY_RESIDUAL,
   GENESIS_VAULT_PRICE,
+  GENESIS_RESERVE_DENOMINATOR,
+  GENESIS_RESERVE_BUY_IN_DENOMINATOR,
+  GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE,
+  GENESIS_MAX_NATIVE_ACQUISITION_FEE,
   POSITION_PORTFOLIO_MAX_PAGE_SIZE,
   Q128,
   Q96,
@@ -208,8 +213,12 @@ const snapshot: BasketSnapshot = {
 describe("standalone Statics Genesis", () => {
   it("conserves the fixed token and paired Genesis supplies", () => {
     expect(STATICS_TREASURY_ALLOCATION + STATICS_DOPPLER_INVENTORY).toBe(STATICS_MAX_SUPPLY);
+    expect(GENESIS_VAULT_PRICE).toBe(180_000n * 10n ** 18n);
     expect(GENESIS_FULL_BACKING).toBe(GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE);
-    expect(GENESIS_SUPPLY_RESIDUAL).toBe(10n * 10n ** 18n);
+    // 5,555 * 180,000 = 999,900,000 STATICS backing; the remaining 100,000 STATICS are unpaired
+    // supply available for the public Doppler market and treasury, not a Genesis backing residual.
+    expect(GENESIS_SUPPLY_RESIDUAL).toBe(STATICS_MAX_SUPPLY - GENESIS_FULL_BACKING);
+    expect(GENESIS_SUPPLY_RESIDUAL).toBe(100_000n * 10n ** 18n);
   });
 
   it("exports the four-curve nonproduction Doppler fixture", () => {
@@ -234,7 +243,7 @@ describe("standalone Statics Genesis", () => {
     expect(() => getDopplerGenesisModules(1)).toThrow("unsupported Doppler Genesis chain");
   });
 
-  it("builds vault acquisition and redemption transactions", () => {
+  it("builds vault acquisition, donation, and redemption transactions", () => {
     const purchase = buildBuyGenesisTransaction(42n, receiver, 3_000_000_000_000_000n);
     expect(purchase.value).toBe(3_000_000_000_000_000n);
     expect(decodeFunctionData({ abi: staticsGenesisVaultAbi, data: purchase.data })).toEqual({
@@ -245,7 +254,21 @@ describe("standalone Statics Genesis", () => {
       functionName: "redeemGenesis",
       args: [42n, receiver],
     });
+    const donation = buildDonateGenesisReserveTransaction(5n * 10n ** 17n);
+    expect(donation.value).toBe(5n * 10n ** 17n);
+    expect(decodeFunctionData({ abi: staticsGenesisVaultAbi, data: donation.data })).toEqual({
+      functionName: "donate",
+      args: undefined,
+    });
     expect(() => buildBuyGenesisTransaction(42n, receiver, -1n)).toThrow("cannot be negative");
+    expect(() => buildDonateGenesisReserveTransaction(0n)).toThrow("must be positive");
+  });
+
+  it("exposes the fixed reserve economics constants", () => {
+    expect(GENESIS_RESERVE_DENOMINATOR).toBe(5_555n);
+    expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(5_554n);
+    expect(GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE).toBe(3n * 10n ** 15n);
+    expect(GENESIS_MAX_NATIVE_ACQUISITION_FEE).toBe(10n * 10n ** 15n);
   });
 
   it("builds activation, registration, accrual, and launch claim calls", () => {

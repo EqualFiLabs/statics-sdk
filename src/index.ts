@@ -31,9 +31,15 @@ export const STATICS_DOPPLER_INVENTORY = 800_000_000n * 10n ** 18n;
 export const DOPPLER_OWNER_FEE_SHARE = 5n * 10n ** 16n;
 export const STATICS_FEE_RECEIVER_SHARE = 95n * 10n ** 16n;
 export const GENESIS_COLLECTION_SIZE = 5_555n;
-export const GENESIS_VAULT_PRICE = 180_018n * 10n ** 18n;
+export const GENESIS_VAULT_PRICE = 180_000n * 10n ** 18n;
 export const GENESIS_FULL_BACKING = GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE;
 export const GENESIS_SUPPLY_RESIDUAL = STATICS_MAX_SUPPLY - GENESIS_FULL_BACKING;
+/// Fixed reserve denominator. Never depends on circulating or vault-held Genesis.
+export const GENESIS_RESERVE_DENOMINATOR = 5_555n;
+/// Self-consistent post-epoch buy-in denominator (N - 1).
+export const GENESIS_RESERVE_BUY_IN_DENOMINATOR = 5_554n;
+export const GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE = 3n * 10n ** 15n;
+export const GENESIS_MAX_NATIVE_ACQUISITION_FEE = 10n * 10n ** 15n;
 
 export type DopplerGenesisCurve = {
   name: "low" | "medium" | "high" | "filler";
@@ -125,33 +131,47 @@ export const staticsGenesisVaultAbi = parseAbi([
   "function finalized() view returns (bool)",
   "function buyGenesis(uint256 tokenId, address receiver) payable",
   "function redeemGenesis(uint256 tokenId, address receiver)",
-  "function quoteGenesisPurchase() view returns (uint256 staticsPrice, uint256 nativeFee)",
+  "function donate() payable",
+  "function quoteGenesisPurchase() view returns ((uint256 staticsPrice, uint256 reserveBuyIn, uint256 nativeFee, uint256 requiredNative, bool epochActive) quote)",
+  "function quoteGenesisRedemption() view returns ((uint256 staticsPayout, uint256 reservePayout, bool epochActive) quote)",
+  "function reserveBuyIn() view returns (uint256)",
+  "function reserveRedemptionPayout() view returns (uint256)",
+  "function reserveBackingPerGenesis() view returns (uint256)",
+  "function reserveDenominator() view returns (uint256)",
+  "function epochActive() view returns (bool)",
+  "function genesisEpochEnd() view returns (uint256)",
+  "function reserveETH() view returns (uint256)",
   "function vaultPrice() view returns (uint256)",
   "function nativeAcquisitionFee() view returns (uint256)",
-  "function nativeFeeRecipient() view returns (address)",
-  "function claimableNativeFees(address recipient) view returns (uint256)",
-  "function totalNativeFeeLiability() view returns (uint256)",
+  "function purchasesPaused() view returns (bool)",
   "function circulatingGenesis() view returns (uint256)",
   "function vaultInventory() view returns (uint256)",
   "function requiredBacking() view returns (uint256)",
   "function isVaultInventory(uint256 tokenId) view returns (bool)",
-  "function vaultAccounting() view returns ((uint256 vaultPrice, uint256 maximumSupply, uint256 mintedSupply, uint256 vaultInventory, uint256 circulatingGenesis, uint256 tokenBacking, uint256 requiredBacking, uint256 tokenCustody) accounting)",
-  "event GenesisPurchased(address indexed payer, address indexed receiver, uint256 indexed tokenId, uint256 staticsPrice, uint256 nativeFee)",
-  "event GenesisRedeemed(address indexed owner, address indexed receiver, uint256 indexed tokenId, uint256 price)",
+  "function vaultAccounting() view returns ((uint256 vaultPrice, uint256 maximumSupply, uint256 mintedSupply, uint256 vaultInventory, uint256 circulatingGenesis, uint256 tokenBacking, uint256 requiredBacking, uint256 tokenCustody, uint256 reserveETH, uint256 nativeCustody, uint256 genesisEpochEnd, bool epochActive, uint256 reserveBackingPerGenesis) accounting)",
+  "event GenesisPurchased(address indexed payer, address indexed receiver, uint256 indexed tokenId, uint256 staticsPrice, uint256 reserveBuyIn, uint256 nativeFee)",
+  "event GenesisRedeemed(address indexed owner, address indexed receiver, uint256 indexed tokenId, uint256 staticsPayout, uint256 reservePayout)",
+  "event GenesisCollectionFinalized(address indexed collection)",
+  "event PurchasesPausedSet(bool paused)",
+  "event NativeAcquisitionFeeSet(uint256 previousFee, uint256 newFee)",
+  "event ReserveFunded(address indexed contributor, uint256 amount, uint256 reserveETH)",
+  "event PurchaseRefunded(address indexed payer, uint256 amount)",
 ]);
 
 export const genesisActivationRegistryAbi = parseAbi([
-  "function statics() view returns (address)",
+  "function treasury() view returns (address)",
   "function genesisCollection() view returns (address)",
   "function tierOf(uint256 genesisId) view returns (uint8)",
   "function multiplierBps(uint256 genesisId) view returns (uint16)",
   "function tierCost(uint8 tier) view returns (uint256)",
   "function activeConsumer() view returns (address)",
   "function pendingConsumer() view returns (address)",
-  "function activate(uint256 genesisId, uint8 targetTier) returns (uint256 burned)",
-  "event GenesisActivated(uint256 indexed genesisId, uint8 previousTier, uint8 newTier, uint256 staticsBurned)",
+  "function activate(uint256 genesisId, uint8 targetTier) returns (uint256 paid)",
+  "event GenesisActivated(uint256 indexed genesisId, uint8 previousTier, uint8 newTier, uint256 staticsPaid)",
   "event GenesisActivationReset(uint256 indexed genesisId, address indexed previousOwner, address indexed nextOwner)",
   "event TierCostUpdated(uint8 indexed tier, uint256 previousCost, uint256 newCost)",
+  "event ConsumerProposed(address indexed currentConsumer, address indexed pendingConsumer)",
+  "event ConsumerAccepted(address indexed previousConsumer, address indexed newConsumer)",
 ]);
 
 export const staticsFeeReceiverAbi = parseAbi([
@@ -159,18 +179,27 @@ export const staticsFeeReceiverAbi = parseAbi([
   "function numeraire() view returns (address)",
   "function poolInitializer() view returns (address)",
   "function poolId() view returns (bytes32)",
+  "function reserveVault() view returns (address)",
+  "function reserveShareBps() view returns (uint16)",
   "function activeDistributor() view returns (address)",
   "function pendingDistributor() view returns (address)",
   "function cumulativeHarvested(address asset) view returns (uint256)",
   "function cumulativeDistributorAttributed(address distributor, address asset) view returns (uint256)",
   "function distributorClaimable(address distributor, address asset) view returns (uint256)",
   "function totalDistributorLiability(address asset) view returns (uint256)",
+  "function cumulativeReserveWeth() view returns (uint256)",
+  "function cumulativeDistributorWeth() view returns (uint256)",
   "function harvest() returns (uint256 staticsAmount, uint256 numeraireAmount)",
   "function claimDistributorFees(address asset, address receiver) returns (uint256 amount)",
   "event MarketBound(address indexed statics, address indexed numeraire, bytes32 indexed poolId)",
+  "event ReserveVaultBound(address indexed reserveVault)",
+  "event ReserveShareUpdated(uint16 previousShareBps, uint16 newShareBps)",
+  "event ReserveFunded(uint256 grossWeth, uint256 reserveWeth, uint256 distributorWeth)",
   "event FeesHarvested(address indexed distributor, address indexed asset, uint256 amount, uint256 cumulativeAmount)",
   "event DistributorProposed(address indexed currentDistributor, address indexed pendingDistributor)",
   "event DistributorAccepted(address indexed previousDistributor, address indexed newDistributor)",
+  "event DistributorFeesClaimed(address indexed distributor, address indexed asset, address indexed receiver, uint256 amount)",
+  "event SurplusRecovered(address indexed asset, address indexed receiver, uint256 amount)",
 ]);
 
 export const genesisLaunchDistributorAbi = parseAbi([
@@ -1652,7 +1681,6 @@ export const staticsGenesisErrorAbi = parseAbi([
   "error GenesisOwnerMismatch(uint256 genesisId,address expected,address actual)",
   "error PositionOwnerMismatch(uint256 positionId,address expected,address actual)",
   "error UnauthorizedGenesisCollection(address caller)",
-  "error ActivationBurnExceedsMaximum(uint256 required,uint256 maximum)",
   "error GenesisAlreadyLinked(uint256 genesisId,uint256 positionId)",
   "error PositionAlreadyLinked(uint256 positionId,uint256 genesisId)",
   "error GenesisNotLinked(uint256 genesisId)",
@@ -1843,19 +1871,37 @@ export const staticsDollarErrorAbi = parseAbi([
   "error NativeTransferFailed(address receiver,uint256 amount)",
 ]);
 
+/// Builds a Genesis acquisition. `maxNativeValue` is the maximum native ETH the caller
+/// authorizes: during the Genesis Epoch it is zero, and after the epoch it must cover the
+/// reserve buy-in plus the native acquisition fee. Any excess is refunded on-chain. Read
+/// `quoteGenesisPurchase().requiredNative` for the current amount.
 export function buildBuyGenesisTransaction(
   tokenId: bigint,
   receiver: Address,
-  nativeFee: bigint,
+  maxNativeValue: bigint,
 ): PreparedTransaction {
-  if (nativeFee < 0n) throw new Error("native Genesis acquisition fee cannot be negative");
+  if (maxNativeValue < 0n) throw new Error("maximum native Genesis acquisition value cannot be negative");
   return {
     data: encodeFunctionData({
       abi: staticsGenesisVaultAbi,
       functionName: "buyGenesis",
       args: [tokenId, receiver],
     }),
-    value: nativeFee,
+    value: maxNativeValue,
+  };
+}
+
+/// Builds a permissionless reserve capitalization call. The attached native value is added to
+/// the permanent Genesis ETH reserve in full and can never be withdrawn.
+export function buildDonateGenesisReserveTransaction(nativeAmount: bigint): PreparedTransaction {
+  if (nativeAmount <= 0n) throw new Error("Genesis reserve donation must be positive");
+  return {
+    data: encodeFunctionData({
+      abi: staticsGenesisVaultAbi,
+      functionName: "donate",
+      args: [],
+    }),
+    value: nativeAmount,
   };
 }
 

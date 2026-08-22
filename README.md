@@ -31,9 +31,26 @@ manifest.
 
 The fixed accounting constants distinguish the 200 million-token treasury
 allocation from the 800 million-token Doppler inventory. All 5,555 Genesis NFTs
-start in the vault, each representing a fixed 180,018 STATICS redemption claim.
-The resulting 999,999,990-token full backing leaves the intentional 10 STATICS
-paired-supply residual described by the Genesis ADR.
+start in the vault, each representing a fixed 180,000 STATICS redemption claim
+plus, after the immutable Genesis Epoch, a 1/5,555 share of a permanent native
+ETH reserve. The 5,555 * 180,000 = 999,900,000-STATICS full backing leaves the
+remaining 100,000 STATICS as unpaired supply for the public Doppler market and
+treasury, not a Genesis backing residual.
+
+During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) acquisition and
+redemption move STATICS only: a buy costs exactly 180,000 STATICS with zero
+native value and redemption returns exactly 180,000 STATICS. After the epoch a
+buy additionally charges a reserve buy-in of `ceil(reserveETH / 5,554)` plus the
+native acquisition fee — both permanently enter the reserve — while redemption
+additionally pays `floor(reserveETH / 5,555)`. `buildBuyGenesisTransaction`'s
+native `value` is a maximum: the vault refunds any excess on-chain, so read
+`quoteGenesisPurchase().requiredNative` immediately before building.
+`buildDonateGenesisReserveTransaction` performs a permissionless, irreversible
+reserve capitalization; the reserve has no withdrawal path. The fee receiver
+splits a configurable `reserveShareBps` (0..10,000) of harvested WETH into the
+reserve — unwrapping and donating atomically — and attributes all STATICS and
+the WETH remainder to the active distributor. Activation forwards its exact
+STATICS cost to the treasury and never burns STATICS.
 
 `splitSwapFee` mirrors the bilateral swap-fee split across protocol-owned
 liquidity, activated protocol-pool LPs, deposited BasketToken positions, global
@@ -190,8 +207,9 @@ share never falls back, and treasury absorbs the rounding dust. Matched locked
 liquidity is added as
 hook-owned full-range liquidity during the swap.
 
-Genesis builders activate tiers by burning the cumulative configured STATICS
-cost, link one activated Genesis NFT to one PositionNFT, and unlink it before
+Genesis builders activate tiers by paying the cumulative configured STATICS
+cost — forwarded in full to the treasury, never burned — link one activated
+Genesis NFT to one PositionNFT, and unlink it before
 either NFT transfers. Activation resets on an ownership-changing Genesis
 transfer. Reward reads distinguish actual stake from multiplier-adjusted
 effective weight. Before a weight-changing action, clients should check each
