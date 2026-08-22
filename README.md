@@ -4,11 +4,11 @@ This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.
 
-`splitSwapFee` mirrors the bilateral swap-fee split across permanent liquidity,
+`splitSwapFee` mirrors the bilateral swap-fee split across locked liquidity,
 activated protocol-pool LPs, deposited BasketToken positions, global Statics
-stakers, and treasury. Treasury receives division dust; unavailable LP,
-basket-staker, and Statics-staker allocations independently redirect to
-permanent liquidity.
+stakers, StonkBrokers, index creators, and treasury. Treasury receives division
+dust. Unavailable LP and Basket-staker allocations redirect to locked liquidity;
+an unavailable Statics-staker allocation redirects to treasury.
 
 `quoteMint` and `quoteRedeem` select the greatest qualifying static fee tier
 and reproduce the aggregate-supply rounding used onchain. They do not model a
@@ -38,12 +38,9 @@ request field. Reusing an existing Position through `stake`,
 `stakeRiskShares`, `depositBasketCollateral`, or `mintBasketCollateral` does
 not pay the fee again. Zero means free Position creation.
 
-`tokenURI(positionId)` returns self-contained Base64 JSON and SVG metadata.
-The avatar depends only on chain ID, Statics Diamond address, and position ID,
-so transfers and protocol activity do not alter it. Governance integrations can
-read `positionRenderer()` and encode `setPositionRenderer` through
-`buildSetPositionRendererCall`; setting the renderer to zero disables metadata
-without changing PositionNFT ownership or protocol state.
+`tokenURI(positionId)` returns minimal PositionNFT account metadata. Generated
+SVG identity belongs to the separate 5,555-token Genesis collection, whose
+`tokenURI` reflects its permanent token identity and current activation tier.
 
 Global Statics stake is always withdrawable. A selected reward asset begins
 with pending stake and becomes eligible at the next hourly boundary at least
@@ -134,11 +131,23 @@ match the swap exactly.
 `quoteHookFee` rounds either realized bilateral fee leg up exactly as the hook
 does. `effectiveCanonicalFees` reports the zero native LP fee and the separate
 input/output hook rates; the launch defaults are 25 basis points on each leg.
-`splitSwapFee` applies the default 40% POL, 10% canonical-LP, 20%
-basket-staker, 20% global Statics-staker, and 10% treasury allocation after a
-leg is charged. Callers supply each reward destination's eligibility
-independently; unavailable shares redirect to POL. Matched POL is added as
+`splitSwapFee` applies the default 10% locked-liquidity, 20% canonical-LP, 20%
+basket-staker, 15% global Statics-staker, 10% StonkBrokers, 5% index-creator,
+and 20% treasury allocation after a leg is charged. Callers supply each reward
+destination's eligibility independently. Matched locked liquidity is added as
 hook-owned full-range liquidity during the swap.
+
+Genesis builders activate tiers by burning the cumulative configured STATICS
+cost, link one activated Genesis NFT to one PositionNFT, and unlink it before
+either NFT transfers. Activation resets on an ownership-changing Genesis
+transfer. Reward reads distinguish actual stake from multiplier-adjusted
+effective weight. Before a weight-changing action, clients should check each
+selected asset with `rewardBookNeedsCheckpoint` and submit bounded
+`checkpointRewardAssets` batches when required.
+
+Creator swap revenue is pull based through `claimCreatorRevenue`. Partner
+revenue is distributed permissionlessly through `distributePartnerRevenue`;
+the caller receives the configured tip from the accrued partner amount.
 
 `quoteRangeAmounts` mirrors Uniswap v4 `TickMath` and `SqrtPriceMath` input
 rounding. `quoteBorrowAndProvideLiquidity` combines those range amounts with

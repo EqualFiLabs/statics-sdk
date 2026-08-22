@@ -1,8 +1,24 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const manifestUrl = new URL("../../deployments/robinhood-chain-4663.json", import.meta.url);
 const outputUrl = new URL("../src/generated/robinhoodChain.ts", import.meta.url);
+const configuredManifest = process.env.STATICS_ROBINHOOD_MANIFEST;
+const repositoryManifestUrl = new URL("../deployments/robinhood-chain-4663.json", import.meta.url);
+const manifestUrl = configuredManifest
+  ? new URL(`file://${resolve(configuredManifest)}`)
+  : repositoryManifestUrl;
+
+if (!existsSync(manifestUrl)) {
+  if (!existsSync(outputUrl)) {
+    throw new Error(
+      "missing generated Robinhood binding; set STATICS_ROBINHOOD_MANIFEST to a protocol deployment manifest",
+    );
+  }
+  console.log("Robinhood manifest not supplied; retaining the committed generated binding");
+  process.exit(0);
+}
+
 const manifest = JSON.parse(readFileSync(manifestUrl, "utf8"));
 
 const contract = (name) => {
