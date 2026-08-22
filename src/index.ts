@@ -159,6 +159,7 @@ export const staticsGenesisVaultAbi = parseAbi([
 ]);
 
 export const genesisActivationRegistryAbi = parseAbi([
+  "function statics() view returns (address)",
   "function treasury() view returns (address)",
   "function genesisCollection() view returns (address)",
   "function tierOf(uint256 genesisId) view returns (uint8)",

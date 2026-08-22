@@ -264,11 +264,13 @@ describe("standalone Statics Genesis", () => {
     expect(() => buildDonateGenesisReserveTransaction(0n)).toThrow("must be positive");
   });
 
-  it("exposes the fixed reserve economics constants", () => {
+  it("exposes the fixed reserve economics constants and activation bindings", () => {
     expect(GENESIS_RESERVE_DENOMINATOR).toBe(5_555n);
     expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(5_554n);
     expect(GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE).toBe(3n * 10n ** 15n);
     expect(GENESIS_MAX_NATIVE_ACQUISITION_FEE).toBe(10n * 10n ** 15n);
+    expect(getAbiItem({ abi: genesisActivationRegistryAbi, name: "statics" })).toBeDefined();
+    expect(getAbiItem({ abi: genesisActivationRegistryAbi, name: "treasury" })).toBeDefined();
   });
 
   it("builds activation, registration, accrual, and launch claim calls", () => {
