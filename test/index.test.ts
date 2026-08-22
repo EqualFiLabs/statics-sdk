@@ -1,10 +1,15 @@
 import {
   decodeAbiParameters,
   decodeErrorResult,
+  decodeEventLog,
   decodeFunctionData,
+  encodeAbiParameters,
   encodeErrorResult,
+  encodeEventTopics,
   encodeFunctionData,
+  getAbiItem,
   hashTypedData,
+  keccak256,
   parseAbiParameters,
 } from "viem";
 import { describe, expect, it, vi } from "vitest";
@@ -17,7 +22,6 @@ import {
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
   buildClearCanonicalPoolFeeConfigurationCall,
-  buildClearProtocolPoolFeeConfigurationCall,
   buildClaimRewardsCall,
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
@@ -26,10 +30,8 @@ import {
   buildCreateAndStakeCall,
   buildCreatePositionCall,
   buildCreateBasketTransaction,
-  buildCreateGovernancePoolCall,
   buildBuyGenesisTransaction,
   buildDecommissionBasketCall,
-  buildDecommissionGovernancePoolCall,
   buildDepositETHTransaction,
   buildErc20PermitTypedData,
   buildIncreaseStakedLiquidityCall,
@@ -61,8 +63,24 @@ import {
   buildLinkGenesisCall,
   buildUnlinkGenesisCall,
   buildSetCanonicalPoolFeeConfigurationCall,
-  buildSetProtocolPoolFeeConfigurationCall,
-  buildQuoteGovernancePoolCall,
+  buildQuotePoolCall,
+  buildCreatePoolCall,
+  buildInvalidatePoolCreationNonceCall,
+  buildSetPoolCreationFeeCall,
+  buildSetProtocolPoolFeeRateCall,
+  buildSetBasketFeeAllocationCall,
+  buildSetGeneralFeeAllocationCall,
+  buildDecommissionGeneralPoolCall,
+  buildCreatePoolAuthorizationTypedData,
+  computeCreatePoolAuthorizationDigest,
+  quoteProtocolPool,
+  sortPoolCurrencies,
+  normalizeSqrtPriceBPerAX96,
+  buildProtocolPoolKey,
+  computePoolId,
+  ProtocolPoolKind,
+  MIN_SQRT_PRICE,
+  MAX_SQRT_PRICE,
   buildReplaceLiquidityManagerCall,
   buildStakeLiquidityPositionCall,
   buildTestnetFaucetClaimCall,
@@ -149,6 +167,23 @@ const assetB = "0x0000000000000000000000000000000000000002";
 const basketToken = "0x0000000000000000000000000000000000000003";
 const sourceToken = "0x0000000000000000000000000000000000000004";
 const receiver = "0x0000000000000000000000000000000000000005";
+
+// Encodes an event's topics and data from `staticsAbi`, then decodes the log back. This proves the
+// event signature and indexed/non-indexed layout in the SDK matches the on-chain event.
+function encodeEventArgs(eventName: string, args: Record<string, unknown>) {
+  const item = getAbiItem({ abi: staticsAbi, name: eventName }) as {
+    inputs: readonly { name?: string; type: string; indexed?: boolean }[];
+  };
+  const topics = encodeEventTopics({ abi: staticsAbi, eventName, args } as never);
+  const dataInputs = item.inputs.filter((input) => !input.indexed);
+  const data = dataInputs.length === 0
+    ? "0x"
+    : encodeAbiParameters(
+      dataInputs.map((input) => ({ name: input.name, type: input.type })),
+      dataInputs.map((input) => args[input.name as string]),
+    );
+  return decodeEventLog({ abi: staticsAbi, topics: topics as [`0x${string}`, ...`0x${string}`[]], data });
+}
 
 const snapshot: BasketSnapshot = {
   basketId: 0n,
@@ -246,69 +281,60 @@ describe("standalone Statics Genesis", () => {
 });
 
 describe("Statics static basket quotes", () => {
-  it("splits seven-way hook fees with the protocol fallback routes", () => {
+  it("splits fees across five configurable shares with the fixed creator carve and fallback routes", () => {
     const configuration = {
       inputFeeBps: 25n,
       outputFeeBps: 25n,
-      lockedLiquidityShareBps: 1_000n,
+      polShareBps: 1_000n,
       liquidityProviderShareBps: 2_000n,
       basketStakerShareBps: 2_000n,
       staticsStakerShareBps: 1_500n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 2_000n,
+      treasuryShareBps: 3_000n,
     };
     expect(splitSwapFee(101n, configuration, true, true, true)).toEqual({
-      lockedLiquidityAmount: 10n,
+      polAmount: 10n,
       liquidityProviderAmount: 20n,
       basketStakerAmount: 20n,
       staticsStakerAmount: 15n,
-      stonkBrokersAmount: 10n,
-      indexCreatorAmount: 5n,
-      treasuryAmount: 21n,
+      creatorAmount: 5n,
+      treasuryAmount: 31n,
     });
     expect(splitSwapFee(101n, configuration, true, false, true)).toEqual({
-      lockedLiquidityAmount: 30n,
+      polAmount: 30n,
       liquidityProviderAmount: 20n,
       basketStakerAmount: 0n,
       staticsStakerAmount: 15n,
-      stonkBrokersAmount: 10n,
-      indexCreatorAmount: 5n,
-      treasuryAmount: 21n,
+      creatorAmount: 5n,
+      treasuryAmount: 31n,
     });
     expect(splitSwapFee(101n, configuration, false, true, false)).toEqual({
-      lockedLiquidityAmount: 30n,
+      polAmount: 30n,
       liquidityProviderAmount: 0n,
       basketStakerAmount: 20n,
       staticsStakerAmount: 0n,
-      stonkBrokersAmount: 10n,
-      indexCreatorAmount: 5n,
-      treasuryAmount: 36n,
+      creatorAmount: 5n,
+      treasuryAmount: 46n,
     });
   });
 
-  it("rejects swap fee splits that do not conserve one hundred percent", () => {
+  it("rejects swap fee splits whose configurable shares do not total 9500 BPS", () => {
     expect(() => splitSwapFee(100n, {
       inputFeeBps: 25n,
       outputFeeBps: 25n,
-      lockedLiquidityShareBps: 1_000n,
+      polShareBps: 1_000n,
       liquidityProviderShareBps: 2_000n,
       basketStakerShareBps: 2_000n,
       staticsStakerShareBps: 1_500n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 1_999n,
+      treasuryShareBps: 2_999n,
     }, true, true, true)).toThrow("invalid swap fee split");
     expect(() => splitSwapFee(100n, {
       inputFeeBps: 25n,
       outputFeeBps: 25n,
-      lockedLiquidityShareBps: -1_000n,
+      polShareBps: -1_000n,
       liquidityProviderShareBps: 0n,
       basketStakerShareBps: 500n,
       staticsStakerShareBps: 500n,
-      stonkBrokersShareBps: 0n,
-      indexCreatorShareBps: 0n,
-      treasuryShareBps: 10_000n,
+      treasuryShareBps: 9_500n,
     }, true, true, true)).toThrow("invalid swap fee split");
   });
 
@@ -395,66 +421,92 @@ describe("Statics static basket quotes", () => {
     });
   });
 
-  it("encodes governed protocol pool administration and generic manager calls", () => {
+  it("encodes permissionless protocol pool creation, administration and generic manager calls", () => {
     const poolId = `0x${"11".repeat(32)}` as const;
     const manager = "0x0000000000000000000000000000000000000006";
-    const governanceParams = {
+    const feeRate = { inputFeeBps: 40n, outputFeeBps: 60n };
+    const createParams = {
       tokenA: assetA,
       tokenB: assetB,
+      tickSpacing: 60,
       sqrtPriceBPerAX96: encodeSqrtPriceBPerAX96(1n, 1n),
-      amountAMax: 100n,
-      amountBMax: 200n,
-      minLiquidity: 1n,
-      payer: receiver,
+      feeRate,
+      creator: receiver,
+      nonce: 7n,
       deadline: 7_200n,
     };
-    expect(governanceParams.sqrtPriceBPerAX96).toBe(Q96);
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuoteGovernancePoolCall(governanceParams) }).functionName)
-      .toBe("quoteGovernancePool");
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildCreateGovernancePoolCall(governanceParams) }).functionName)
-      .toBe("createGovernancePool");
-
-    const configuration = {
-      inputFeeBps: 40n,
-      outputFeeBps: 60n,
-      lockedLiquidityShareBps: 1_000n,
-      liquidityProviderShareBps: 2_000n,
-      basketStakerShareBps: 2_000n,
-      staticsStakerShareBps: 1_500n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 2_000n,
-    };
-    expect(decodeFunctionData({
+    expect(createParams.sqrtPriceBPerAX96).toBe(Q96);
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuotePoolCall(createParams) }).functionName)
+      .toBe("quotePool");
+    const createData = decodeFunctionData({
       abi: staticsAbi,
-      data: buildSetProtocolPoolFeeConfigurationCall(poolId, configuration),
-    })).toEqual({
-      functionName: "setProtocolPoolFeeConfiguration",
-      args: [poolId, {
-        inputFeeBps: 40,
-        outputFeeBps: 60,
-        lockedLiquidityShareBps: 1_000,
-        liquidityProviderShareBps: 2_000,
-        basketStakerShareBps: 2_000,
-        staticsStakerShareBps: 1_500,
-        stonkBrokersShareBps: 1_000,
-        indexCreatorShareBps: 500,
-        treasuryShareBps: 2_000,
-      }],
+      data: buildCreatePoolCall(createParams, "0xabcd"),
     });
-    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
-      ...configuration,
-      treasuryShareBps: 1_999n,
-    })).toThrow("pool fee shares must sum to 10000 BPS");
-    expect(() => buildSetProtocolPoolFeeConfigurationCall(poolId, {
-      ...configuration,
-      inputFeeBps: 101n,
-      outputFeeBps: 100n,
-    })).toThrow("combined pool fee rate exceeds 200 BPS");
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildClearProtocolPoolFeeConfigurationCall(poolId) }).functionName)
-      .toBe("clearProtocolPoolFeeConfiguration");
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGovernancePoolCall(poolId) }).functionName)
-      .toBe("decommissionGovernancePool");
+    expect(createData.functionName).toBe("createPool");
+    expect(createData.args?.[1]).toBe("0xabcd");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildCreatePoolCall(createParams) }).args?.[1]).toBe("0x");
+
+    expect(() => buildCreatePoolCall({ ...createParams, feeRate: { inputFeeBps: 150n, outputFeeBps: 60n } }))
+      .toThrow("combined pool fee rate exceeds 200 BPS");
+    expect(() => buildCreatePoolCall({ ...createParams, tickSpacing: 0 }))
+      .toThrow("tick spacing outside protocol bounds");
+    expect(() => buildCreatePoolCall({ ...createParams, tickSpacing: 32_768 }))
+      .toThrow("tick spacing outside protocol bounds");
+
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildInvalidatePoolCreationNonceCall(9n) }))
+      .toEqual({ functionName: "invalidatePoolCreationNonce", args: [9n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetPoolCreationFeeCall(1_000n) }))
+      .toEqual({ functionName: "setPoolCreationFee", args: [1_000n] });
+
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetProtocolPoolFeeRateCall(poolId, feeRate) }))
+      .toEqual({ functionName: "setProtocolPoolFeeRate", args: [poolId, { inputFeeBps: 40, outputFeeBps: 60 }] });
+    expect(() => buildSetProtocolPoolFeeRateCall(poolId, { inputFeeBps: 150n, outputFeeBps: 60n }))
+      .toThrow("combined pool fee rate exceeds 200 BPS");
+
+    const basketAllocation = {
+      polShareBps: 1_000n,
+      liquidityProviderShareBps: 2_500n,
+      basketStakerShareBps: 2_500n,
+      staticsStakerShareBps: 1_000n,
+      treasuryShareBps: 2_500n,
+    };
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetBasketFeeAllocationCall(basketAllocation) }))
+      .toEqual({
+        functionName: "setBasketFeeAllocation",
+        args: [{
+          polShareBps: 1_000,
+          liquidityProviderShareBps: 2_500,
+          basketStakerShareBps: 2_500,
+          staticsStakerShareBps: 1_000,
+          treasuryShareBps: 2_500,
+        }],
+      });
+    expect(() => buildSetBasketFeeAllocationCall({ ...basketAllocation, treasuryShareBps: 2_499n }))
+      .toThrow("basket fee allocation must sum to 9500 BPS");
+
+    const generalAllocation = {
+      polShareBps: 2_000n,
+      liquidityProviderShareBps: 4_000n,
+      staticsStakerShareBps: 1_000n,
+      treasuryShareBps: 2_500n,
+    };
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetGeneralFeeAllocationCall(generalAllocation) }))
+      .toEqual({
+        functionName: "setGeneralFeeAllocation",
+        args: [{
+          polShareBps: 2_000,
+          liquidityProviderShareBps: 4_000,
+          staticsStakerShareBps: 1_000,
+          treasuryShareBps: 2_500,
+        }],
+      });
+    expect(() => buildSetGeneralFeeAllocationCall({ ...generalAllocation, treasuryShareBps: 2_501n }))
+      .toThrow("general fee allocation must sum to 9500 BPS");
+
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGeneralPoolCall(poolId) }).functionName)
+      .toBe("decommissionGeneralPool");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(assetA, receiver, 5n) }))
+      .toEqual({ functionName: "claimCreatorRevenue", args: [assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
       .toBe("replaceLiquidityManager");
 
@@ -475,17 +527,197 @@ describe("Statics static basket quotes", () => {
       .toBe("mintUserPosition");
   });
 
-  it("decodes governed protocol pool errors", () => {
+  it("decodes permissionless protocol pool errors", () => {
     const poolId = `0x${"22".repeat(32)}` as const;
-    const data = encodeErrorResult({
+    const registered = encodeErrorResult({
       abi: staticsProtocolPoolErrorAbi,
       errorName: "ProtocolPoolAlreadyRegistered",
       args: [poolId, 2],
     });
-    expect(decodeErrorResult({ abi: staticsProtocolPoolErrorAbi, data })).toMatchObject({
+    expect(decodeErrorResult({ abi: staticsProtocolPoolErrorAbi, data: registered })).toMatchObject({
       errorName: "ProtocolPoolAlreadyRegistered",
       args: [poolId, 2],
     });
+
+    const nonce = encodeErrorResult({
+      abi: staticsProtocolPoolErrorAbi,
+      errorName: "PoolCreationNonceAlreadyUsed",
+      args: [receiver, 7n],
+    });
+    expect(decodeErrorResult({ abi: staticsProtocolPoolErrorAbi, data: nonce })).toMatchObject({
+      errorName: "PoolCreationNonceAlreadyUsed",
+      args: [receiver, 7n],
+    });
+
+    const auth = encodeErrorResult({
+      abi: staticsProtocolPoolErrorAbi,
+      errorName: "InvalidCreatorAuthorization",
+      args: [receiver],
+    });
+    expect(decodeErrorResult({ abi: staticsProtocolPoolErrorAbi, data: auth })).toMatchObject({
+      errorName: "InvalidCreatorAuthorization",
+      args: [receiver],
+    });
+  });
+
+  it("sorts pool currencies and normalizes reciprocal B-per-A sqrt price", () => {
+    // tokenA (0x..01) < tokenB (0x..02): tokenA is currency0, price used directly.
+    const forward = sortPoolCurrencies(assetA, assetB);
+    expect(forward).toEqual({ currency0: assetA, currency1: assetB, tokenAIsCurrency0: true });
+    expect(normalizeSqrtPriceBPerAX96(assetA, assetB, Q96)).toBe(Q96);
+
+    // Reversed order: tokenB sorts first, so price reciprocates to Q96*Q96/price.
+    const reversed = sortPoolCurrencies(assetB, assetA);
+    expect(reversed).toEqual({ currency0: assetA, currency1: assetB, tokenAIsCurrency0: false });
+    const raw = 2n * Q96;
+    expect(normalizeSqrtPriceBPerAX96(assetB, assetA, raw)).toBe((Q96 * Q96) / raw);
+
+    expect(() => sortPoolCurrencies(assetA, assetA)).toThrow("identical pool tokens");
+    expect(() => normalizeSqrtPriceBPerAX96(assetA, assetB, 0n)).toThrow("invalid pool price");
+    // Below MIN_SQRT_PRICE.
+    expect(() => normalizeSqrtPriceBPerAX96(assetA, assetB, MIN_SQRT_PRICE - 1n)).toThrow("invalid pool price");
+    // At/above MAX_SQRT_PRICE.
+    expect(() => normalizeSqrtPriceBPerAX96(assetA, assetB, MAX_SQRT_PRICE)).toThrow("invalid pool price");
+  });
+
+  it("computes the sorted PoolKey and PoolId with v4 encoding semantics", () => {
+    const hook = "0x0000000000000000000000000000000000000abc" as const;
+    const key = buildProtocolPoolKey(assetB, assetA, 60, hook);
+    expect(key).toEqual({ currency0: assetA, currency1: assetB, fee: 0, tickSpacing: 60, hooks: hook });
+
+    // PoolId equals keccak256(abi.encode(poolKey)) — struct field order matches PoolKey.
+    const expected = keccak256(
+      encodeAbiParameters(
+        parseAbiParameters("address,address,uint24,int24,address"),
+        [assetA, assetB, 0, 60, hook],
+      ),
+    );
+    expect(computePoolId(key)).toBe(expected);
+
+    // Distinct tick spacing yields a distinct PoolId; fee is always zero.
+    expect(computePoolId(buildProtocolPoolKey(assetA, assetB, 61, hook))).not.toBe(expected);
+    expect(buildProtocolPoolKey(assetA, assetB, 1, hook).fee).toBe(0);
+  });
+
+  it("derives the CreatePool EIP-712 digest matching the Solidity domain and struct", () => {
+    const chainId = 46_630;
+    const diamond = "0x00000000000000000000000000000000000d1a30" as const;
+    const key = buildProtocolPoolKey(assetA, assetB, 60, "0x0000000000000000000000000000000000000abc");
+    const poolId = computePoolId(key);
+    const message = {
+      poolId,
+      sqrtPriceX96: Q96,
+      inputFeeBps: 40n,
+      outputFeeBps: 60n,
+      creator: receiver,
+      nonce: 7n,
+      deadline: 7_200n,
+    };
+
+    const typedData = buildCreatePoolAuthorizationTypedData(chainId, diamond, message);
+    expect(typedData.domain).toEqual({
+      name: "Statics Protocol Pools",
+      version: "1",
+      chainId,
+      verifyingContract: diamond,
+    });
+    expect(typedData.primaryType).toBe("CreatePool");
+    expect(typedData.types.CreatePool.map((f) => f.name)).toEqual([
+      "poolId",
+      "sqrtPriceX96",
+      "inputFeeBps",
+      "outputFeeBps",
+      "creator",
+      "nonce",
+      "deadline",
+    ]);
+
+    // Manual digest must equal viem's hashTypedData over the same domain/types/message.
+    const manual = computeCreatePoolAuthorizationDigest(chainId, diamond, message);
+    expect(manual).toBe(hashTypedData(typedData));
+
+    // The off-chain quote reproduces the same digest, price, PoolId and key.
+    const quote = quoteProtocolPool(
+      chainId,
+      diamond,
+      "0x0000000000000000000000000000000000000abc",
+      {
+        tokenA: assetA,
+        tokenB: assetB,
+        tickSpacing: 60,
+        sqrtPriceBPerAX96: Q96,
+        feeRate: { inputFeeBps: 40n, outputFeeBps: 60n },
+        creator: receiver,
+        nonce: 7n,
+        deadline: 7_200n,
+      },
+      1_000n,
+    );
+    expect(quote.poolId).toBe(poolId);
+    expect(quote.key).toEqual(key);
+    expect(quote.sqrtPriceX96).toBe(Q96);
+    expect(quote.creationFee).toBe(1_000n);
+    expect(quote.authorizationDigest).toBe(manual);
+  });
+
+  it("changing the domain, price, or nonce changes the CreatePool digest", () => {
+    const diamond = "0x00000000000000000000000000000000000d1a30" as const;
+    const base = {
+      poolId: `0x${"11".repeat(32)}` as const,
+      sqrtPriceX96: Q96,
+      inputFeeBps: 40n,
+      outputFeeBps: 60n,
+      creator: receiver,
+      nonce: 1n,
+      deadline: 7_200n,
+    };
+    const baseDigest = computeCreatePoolAuthorizationDigest(1, diamond, base);
+    expect(computeCreatePoolAuthorizationDigest(2, diamond, base)).not.toBe(baseDigest);
+    expect(
+      computeCreatePoolAuthorizationDigest(1, "0x00000000000000000000000000000000000d1a31", base),
+    ).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, nonce: 2n })).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, sqrtPriceX96: Q96 + 1n })).not.toBe(baseDigest);
+  });
+
+  it("decodes permissionless protocol pool and creator-revenue events", () => {
+    const poolId = `0x${"33".repeat(32)}` as const;
+    const created = encodeEventArgs("ProtocolPoolCreated", {
+      poolId,
+      creator: receiver,
+      currency0: assetA,
+      currency1: assetB,
+      tickSpacing: 60,
+      inputFeeBps: 40,
+      outputFeeBps: 60,
+      sqrtPriceX96: Q96,
+      tick: 0,
+    });
+    expect(created.eventName).toBe("ProtocolPoolCreated");
+    expect(created.args).toMatchObject({ poolId, creator: receiver, currency0: assetA, currency1: assetB });
+
+    const invalidated = encodeEventArgs("PoolCreationNonceInvalidated", { creator: receiver, nonce: 7n });
+    expect(invalidated.args).toMatchObject({ creator: receiver, nonce: 7n });
+
+    const feeRateSet = encodeEventArgs("ProtocolPoolFeeRateSet", { poolId, inputFeeBps: 40, outputFeeBps: 60 });
+    expect(feeRateSet.args).toMatchObject({ poolId, inputFeeBps: 40, outputFeeBps: 60 });
+
+    const accrued = encodeEventArgs("CreatorRevenueAccrued", {
+      poolId,
+      creator: receiver,
+      asset: assetA,
+      amount: 500n,
+    });
+    expect(accrued.args).toMatchObject({ poolId, creator: receiver, asset: assetA, amount: 500n });
+
+    const claimed = encodeEventArgs("CreatorRevenueClaimed", {
+      creator: receiver,
+      asset: assetA,
+      receiver,
+      amount: 500n,
+      received: 500n,
+    });
+    expect(claimed.args).toMatchObject({ creator: receiver, asset: assetA, amount: 500n, received: 500n });
   });
 
   it("matches Solidity tick and range amount vectors", () => {
@@ -542,7 +774,7 @@ describe("Statics static basket quotes", () => {
     expect(robinhoodChain.chainId).toBe(4_663);
     expect(robinhoodChain.inputFeeBps).toBe(50);
     expect(robinhoodChain.outputFeeBps).toBe(50);
-    expect(robinhoodChain.hookPermissionMask).toBe("0x10cc");
+    expect(robinhoodChain.hookPermissionMask).toBe("0x10ec");
     expect(robinhoodChain.liquidityCalibration.canonicalLpFeePips).toBe(0);
     expect(robinhoodChain.liquidityCalibration.hookPermissions).toEqual([
       "afterInitialize",
@@ -550,6 +782,7 @@ describe("Statics static basket quotes", () => {
       "beforeSwapReturnDelta",
       "afterSwap",
       "afterSwapReturnDelta",
+      "beforeDonate",
     ]);
     expect(robinhoodChain.contracts.poolManager.address.toLowerCase())
       .toBe("0x8366a39cc670b4001a1121b8f6a443a643e40951");
@@ -1135,29 +1368,25 @@ describe("Statics unified calldata", () => {
       .toBe(false);
   });
 
-  it("encodes governed seven-way fee configuration", () => {
+  it("encodes the five-configurable-share swap fee configuration", () => {
     const data = buildSetSwapFeeConfigurationCall({
       inputFeeBps: 25n,
       outputFeeBps: 25n,
-      lockedLiquidityShareBps: 1_000n,
+      polShareBps: 1_000n,
       liquidityProviderShareBps: 2_000n,
       basketStakerShareBps: 2_000n,
       staticsStakerShareBps: 1_500n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 2_000n,
+      treasuryShareBps: 3_000n,
     });
     expect(decodeFunctionData({ abi: staticsAbi, data }).functionName).toBe("setSwapFeeConfiguration");
     expect(() => buildSetSwapFeeConfigurationCall({
       inputFeeBps: 65_536n,
       outputFeeBps: 0n,
-      lockedLiquidityShareBps: 1_000n,
+      polShareBps: 1_000n,
       liquidityProviderShareBps: 2_000n,
       basketStakerShareBps: 2_000n,
       staticsStakerShareBps: 1_500n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 2_000n,
+      treasuryShareBps: 3_000n,
     })).toThrow("inputFeeBps exceeds uint16");
   });
 
@@ -1165,26 +1394,22 @@ describe("Statics unified calldata", () => {
     const set = buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
       inputFeeBps: 40n,
       outputFeeBps: 60n,
-      lockedLiquidityShareBps: 0n,
+      polShareBps: 0n,
       liquidityProviderShareBps: 0n,
       basketStakerShareBps: 4_000n,
       staticsStakerShareBps: 4_000n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 500n,
+      treasuryShareBps: 1_500n,
     });
     const decoded = decodeFunctionData({ abi: staticsAbi, data: set });
     expect(decoded.functionName).toBe("setCanonicalPoolFeeConfiguration");
     expect(decoded.args).toEqual([7n, assetA, {
       inputFeeBps: 40,
       outputFeeBps: 60,
-      lockedLiquidityShareBps: 0,
+      polShareBps: 0,
       liquidityProviderShareBps: 0,
       basketStakerShareBps: 4_000,
       staticsStakerShareBps: 4_000,
-      stonkBrokersShareBps: 1_000,
-      indexCreatorShareBps: 500,
-      treasuryShareBps: 500,
+      treasuryShareBps: 1_500,
     }]);
     const clear = buildClearCanonicalPoolFeeConfigurationCall(7n, assetA);
     expect(decodeFunctionData({ abi: staticsAbi, data: clear }).functionName)
@@ -1193,29 +1418,25 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(staticsAbi.some((item) => item.type === "event" && item.name === "CanonicalPoolFeeConfigurationSet"))
       .toBe(true);
-    expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeConfigurationCleared"))
+    expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
       .toBe(true);
     expect(() => buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
       inputFeeBps: 40n,
       outputFeeBps: 60n,
-      lockedLiquidityShareBps: 0n,
+      polShareBps: 0n,
       liquidityProviderShareBps: 0n,
       basketStakerShareBps: 4_000n,
       staticsStakerShareBps: 4_000n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 499n,
-    })).toThrow("pool fee shares must sum to 10000 BPS");
+      treasuryShareBps: 1_499n,
+    })).toThrow("pool fee shares must sum to 9500 BPS");
     expect(() => buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
       inputFeeBps: 101n,
       outputFeeBps: 100n,
-      lockedLiquidityShareBps: 0n,
+      polShareBps: 0n,
       liquidityProviderShareBps: 0n,
       basketStakerShareBps: 4_000n,
       staticsStakerShareBps: 4_000n,
-      stonkBrokersShareBps: 1_000n,
-      indexCreatorShareBps: 500n,
-      treasuryShareBps: 500n,
+      treasuryShareBps: 1_500n,
     })).toThrow("combined pool fee rate exceeds 200 BPS");
   });
 

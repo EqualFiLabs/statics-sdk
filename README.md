@@ -35,11 +35,13 @@ start in the vault, each representing a fixed 180,018 STATICS redemption claim.
 The resulting 999,999,990-token full backing leaves the intentional 10 STATICS
 paired-supply residual described by the Genesis ADR.
 
-`splitSwapFee` mirrors the bilateral swap-fee split across locked liquidity,
-activated protocol-pool LPs, deposited BasketToken positions, global Statics
-stakers, StonkBrokers, index creators, and treasury. Treasury receives division
-dust. Unavailable LP and Basket-staker allocations redirect to locked liquidity;
-an unavailable Statics-staker allocation redirects to treasury.
+`splitSwapFee` mirrors the bilateral swap-fee split across protocol-owned
+liquidity, activated protocol-pool LPs, deposited BasketToken positions, global
+Statics stakers, the fixed 5% pool creator, and treasury. The five configurable
+class shares always total 9,500 basis points and the creator share is a fixed
+500. Treasury receives division dust. Unavailable LP and basket-staker
+allocations redirect to protocol-owned liquidity; an unavailable Statics-staker
+allocation redirects to treasury; the creator share never falls back.
 
 `quoteMint` and `quoteRedeem` select the greatest qualifying static fee tier
 and reproduce the aggregate-supply rounding used onchain. They do not model a
@@ -132,17 +134,33 @@ permanently seeds every canonical pool. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 
-Timelocked governance can create an unrelated protocol pool between any two
-compatible ERC-20s with `buildCreateGovernancePoolCall`. Use
-`encodeSqrtPriceBPerAX96` for its raw token-B-per-token-A price and simulate
-`quoteGovernancePool` through `staticsAbi` before constructing the timelock
-proposal. The payer approves the Diamond; registration, initialization, exact
-funding, and permanent seeding remain atomic.
+Anyone can permissionlessly create an unrelated protocol pool between any two
+compatible ERC-20s with `buildCreatePoolCall`. Assemble the `CreatePoolParams`
+by sorting the pair with `sortPoolCurrencies` and encoding the raw
+token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
+to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
+`quoteProtocolPool` (or `buildQuotePoolCall`) before submission to recover the
+canonical `poolId` and the normalized `sqrtPriceX96`. When creation requires an
+authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
+EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `1`, the
+chain id, and the Diamond as `verifyingContract`, over the normalized
+`sqrtPriceX96` — and `computeCreatePoolAuthorizationDigest` reproduces the exact
+digest the Diamond verifies. `buildCreatePoolCall(params, creatorAuthorization)`
+carries the payable creation fee (`buildSetPoolCreationFeeCall` administers it);
+`buildInvalidatePoolCreationNonceCall` burns an unused creator nonce. General
+pool creation requires no token approvals, no initial funding, and no mandatory
+permanent-liquidity seed: a general pool initializes with zero liquidity and
+grows protocol-owned liquidity from subsequent swap activity.
 
-`protocolPool(poolId)` normalizes basket canonical and governance-created
-pools. The PoolId fee builders work for either class. Governance pools have no
-basket reward book, and `buildDecommissionGovernancePoolCall` performs their
-irreversible treasury recovery without touching user LP NFTs.
+`protocolPool(poolId)` normalizes basket canonical and permissionlessly created
+protocol pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
+and `totalCreatorRevenue` cover discovery and revenue reads. Fee administration
+uses `buildSetProtocolPoolFeeRateCall`, `buildSetBasketFeeAllocationCall`, and
+`buildSetGeneralFeeAllocationCall`; the PoolId fee builders work for either
+class. Pool creators claim their accrued 5% revenue share with
+`buildClaimCreatorRevenueCall`, and `buildDecommissionGeneralPoolCall` performs
+the irreversible treasury recovery of a non-basket pool without touching user
+LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Governance
 uses the Diamond for fee configuration. Reward and treasury distribution,
@@ -162,10 +180,14 @@ match the swap exactly.
 `quoteHookFee` rounds either realized bilateral fee leg up exactly as the hook
 does. `effectiveCanonicalFees` reports the zero native LP fee and the separate
 input/output hook rates; the launch defaults are 25 basis points on each leg.
-`splitSwapFee` applies the default 10% locked-liquidity, 20% canonical-LP, 20%
-basket-staker, 15% global Statics-staker, 10% StonkBrokers, 5% index-creator,
-and 20% treasury allocation after a leg is charged. Callers supply each reward
-destination's eligibility independently. Matched locked liquidity is added as
+`splitSwapFee` carves the fixed 5% creator share first, then applies the active
+class allocation profile's five configurable shares — protocol-owned liquidity,
+canonical LP, basket-staker, global Statics-staker, and treasury — which always
+total 9,500 basis points. Callers supply each reward destination's eligibility
+independently: an unavailable LP or basket-staker share routes to protocol-owned
+liquidity, an unavailable Statics-staker share routes to treasury, the creator
+share never falls back, and treasury absorbs the rounding dust. Matched locked
+liquidity is added as
 hook-owned full-range liquidity during the swap.
 
 Genesis builders activate tiers by burning the cumulative configured STATICS
