@@ -2021,7 +2021,7 @@ export function buildClaimGenesisTreasuryRewardsCall(asset: Address, receiver: A
 
 export function buildSetGenesisRewardShareBpsCall(newShareBps: number): Hex {
   if (!Number.isInteger(newShareBps) || newShareBps < 0 || newShareBps > Number(BPS)) {
-    throw new Error("Genesis reward share must be an integer from 0 through 10000 BPS");
+    throw new Error(`Genesis reward share must be an integer from 0 through ${BPS} BPS`);
   }
   return encodeFunctionData({ abi: staticsAbi, functionName: "setGenesisRewardShareBps", args: [newShareBps] });
 }
