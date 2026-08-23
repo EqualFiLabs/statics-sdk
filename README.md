@@ -13,6 +13,12 @@ receiver, and the temporary launch reward distributor. The exported calldata
 builders cover Genesis acquisition, redemption, activation, registration, and
 both NFT-owned and crystallized previous-owner reward claims.
 
+After the full-protocol handoff, use the Diamond builders ending in
+`GenesisRewardsCall` for the permanent reward interval. Launch-era claims stay
+on `GenesisLaunchDistributor`; they are not migrated. Permanent registration
+follows the Genesis token across transfer, while activation resets to Tier 0
+and prior-owner rewards crystallize separately.
+
 The stock Doppler Multicurve initializer assigns 5% of fees earned by its
 launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
 fee receiver. The exported share constants and module bindings describe that
@@ -99,6 +105,13 @@ only the new amount enters the pending tranche. Read `rewardSelection` for the
 exact timestamp and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
+
+`stakePosition` distinguishes raw `stakedBalance` from the current
+`rewardMultiplierBps`; reward-asset and selection reads expose both raw stake
+and effective weight. `buildLinkGenesisCall(positionId, genesisId)` and
+`buildUnlinkGenesisCall(positionId, genesisId)` use the exact Diamond ABI. A
+linked pair cannot transfer independently, and linking moves neither NFT into
+Diamond custody.
 
 Statics Dollar builders cover the typed ETH/WETH deposit and ordinary
 recombination gateway exposed by the same Diamond. Permit variants carry the

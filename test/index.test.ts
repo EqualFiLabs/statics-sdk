@@ -18,6 +18,7 @@ import {
   BasketStatus,
   buildActivateLiquidityPositionCall,
   buildAccrueGenesisLaunchRewardsCall,
+  buildAccrueGenesisRewardsCall,
   buildBorrowAndProvideLiquidityCall,
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
@@ -26,6 +27,9 @@ import {
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
   buildClaimGenesisLaunchRewardsCall,
+  buildClaimGenesisRewardsCall,
+  buildClaimGenesisOwnerRewardsCall,
+  buildClaimGenesisTreasuryRewardsCall,
   buildClaimOwnerGenesisLaunchRewardsCall,
   buildCreateAndStakeCall,
   buildCreatePositionCall,
@@ -43,6 +47,7 @@ import {
   buildMintV4PositionCall,
   buildQuoteMintPeggedAndRecombineCall,
   buildRegisterGenesisCall,
+  buildRegisterGenesisRewardsCall,
   buildOptInRewardAssetsCall,
   buildOptOutRewardAssetsCall,
   buildPermit2ApproveCall,
@@ -56,6 +61,7 @@ import {
   buildRepayCall,
   buildExtendCall,
   buildSetSwapFeeConfigurationCall,
+  buildSetGenesisRewardShareBpsCall,
   buildSetPositionCreationFeeCall,
   buildActivateGenesisCall,
   buildCheckpointRewardAssetsCall,
@@ -1470,11 +1476,24 @@ describe("Statics unified calldata", () => {
       .toMatchObject({ functionName: "checkpointRewardAssets" });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildLinkGenesisCall(7n, 9n) }))
       .toEqual({ functionName: "linkGenesis", args: [7n, 9n] });
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildUnlinkGenesisCall(7n) }))
-      .toEqual({ functionName: "unlinkGenesis", args: [7n] });
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildActivateGenesisCall(7n, 4, 100n) }))
-      .toEqual({ functionName: "activateGenesis", args: [7n, 4, 100n] });
-    expect(() => buildActivateGenesisCall(7n, 0, 100n)).toThrow("target Genesis tier");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildUnlinkGenesisCall(7n, 9n) }))
+      .toEqual({ functionName: "unlinkGenesis", args: [7n, 9n] });
+    expect(decodeFunctionData({ abi: genesisActivationRegistryAbi, data: buildActivateGenesisCall(7n, 4) }))
+      .toEqual({ functionName: "activate", args: [7n, 4] });
+    expect(() => buildActivateGenesisCall(7n, 0)).toThrow("target Genesis tier");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRegisterGenesisRewardsCall(9n) }))
+      .toEqual({ functionName: "registerGenesis", args: [9n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildAccrueGenesisRewardsCall() }))
+      .toEqual({ functionName: "accrueGenesisRewards", args: undefined });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimGenesisRewardsCall(9n, assetA, receiver) }))
+      .toEqual({ functionName: "claimGenesisRewards", args: [9n, assetA, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimGenesisOwnerRewardsCall(assetA, receiver) }))
+      .toEqual({ functionName: "claimGenesisOwnerRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimGenesisTreasuryRewardsCall(assetA, receiver) }))
+      .toEqual({ functionName: "claimGenesisTreasuryRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetGenesisRewardShareBpsCall(5_000) }))
+      .toEqual({ functionName: "setGenesisRewardShareBps", args: [5_000] });
+    expect(() => buildSetGenesisRewardShareBpsCall(10_001)).toThrow("0 through 10000 BPS");
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(assetA, receiver, 5n) }))
       .toEqual({ functionName: "claimCreatorRevenue", args: [assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildDistributePartnerRevenueCall(receiver, assetA) }))
@@ -1483,8 +1502,8 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(staticsTokenAbi.some((entry) => entry.type === "function" && entry.name === "FIXED_SUPPLY"))
       .toBe(true);
-    expect(decodeErrorResult({ abi: staticsGenesisErrorAbi, data: encodeErrorResult({ abi: staticsGenesisErrorAbi, errorName: "GenesisLinkedOnTransfer", args: [7n, 9n] }) }).errorName)
-      .toBe("GenesisLinkedOnTransfer");
+    expect(decodeErrorResult({ abi: staticsGenesisErrorAbi, data: encodeErrorResult({ abi: staticsGenesisErrorAbi, errorName: "GenesisLinkMismatch", args: [7n, 9n] }) }).errorName)
+      .toBe("GenesisLinkMismatch");
     expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoRevenue", args: [receiver, assetA] }) }).errorName)
       .toBe("NoRevenue");
   });

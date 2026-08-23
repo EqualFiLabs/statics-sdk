@@ -410,29 +410,39 @@ export type PreparedTransaction = {
 };
 
 export type GlobalRewardAsset = {
-  actualEligibleStake: bigint;
-  actualPendingStake: bigint;
-  effectiveEligibleWeight: bigint;
-  effectivePendingWeight: bigint;
+  eligibleStake: bigint;
+  eligibleWeight: bigint;
+  pendingStake: bigint;
+  pendingWeight: bigint;
   indexRay: bigint;
-  indexRemainder: bigint;
   indexedReserve: bigint;
   totalClaimable: bigint;
 };
 
 export type GlobalRewardSelection = {
   selected: boolean;
-  actualEligibleStake: bigint;
-  actualPendingStake: bigint;
-  effectiveEligibleWeight: bigint;
-  effectivePendingWeight: bigint;
+  eligibleStake: bigint;
+  eligibleWeight: bigint;
+  pendingStake: bigint;
+  pendingWeight: bigint;
   eligibleAt: bigint;
 };
 
-export type GenesisState = {
-  tier: number;
-  multiplierBps: number;
-  linkedPositionId: bigint;
+export type GlobalStakePosition = {
+  stakedBalance: bigint;
+  rewardMultiplierBps: number;
+  claimAssetCount: bigint;
+  optedInAssetCount: bigint;
+};
+
+export type GenesisRewardBook = {
+  indexRay: bigint;
+  indexRemainder: bigint;
+  indexedAmount: bigint;
+  crystallizedAmount: bigint;
+  totalClaimable: bigint;
+  totalClaimed: bigint;
+  treasuryClaimable: bigint;
 };
 
 export type ProtocolRevenueLiabilities = {
@@ -1077,11 +1087,11 @@ export const staticsAbi = parseAbi([
   "function claimRewards(uint256 positionId,address[] assets,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
   "function distributeTreasuryFees(address asset) returns (uint256 amount)",
   "function pendingRewards(uint256 positionId,address[] assets) view returns (uint256[] amounts)",
-  "function stakePosition(uint256 positionId) view returns ((uint256 stakedBalance,uint256 claimAssetCount,uint256 optedInAssetCount) position)",
-  "function rewardAsset(address asset) view returns ((uint256 actualEligibleStake,uint256 actualPendingStake,uint256 effectiveEligibleWeight,uint256 effectivePendingWeight,uint256 indexRay,uint256 indexRemainder,uint256 indexedReserve,uint256 totalClaimable) state)",
+  "function stakePosition(uint256 positionId) view returns ((uint256 stakedBalance,uint16 rewardMultiplierBps,uint256 claimAssetCount,uint256 optedInAssetCount) position)",
+  "function rewardAsset(address asset) view returns ((uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint256 indexRay,uint256 indexedReserve,uint256 totalClaimable) state)",
   "function positionRewardAssets(uint256 positionId) view returns (address[] assets)",
   "function isRewardAssetOptedIn(uint256 positionId,address asset) view returns (bool)",
-  "function rewardSelection(uint256 positionId,address asset) view returns ((bool selected,uint256 actualEligibleStake,uint256 actualPendingStake,uint256 effectiveEligibleWeight,uint256 effectivePendingWeight,uint40 eligibleAt) selection)",
+  "function rewardSelection(uint256 positionId,address asset) view returns ((bool selected,uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint40 eligibleAt) selection)",
   "function maxRewardAssetsPerPosition() pure returns (uint256)",
   "function rewardEligibilityDelay() pure returns (uint256)",
   "function rewardEligibilityBucketSize() pure returns (uint256)",
@@ -1091,16 +1101,31 @@ export const staticsAbi = parseAbi([
   "function canAccrueStakerRewards(address asset) view returns (bool)",
   "function checkpointRewardAssets(address[] assets)",
   "function rewardBookNeedsCheckpoint(address asset) view returns (bool)",
+  "function locked(uint256 positionId) view returns (bool)",
   "function genesisCollection() view returns (address)",
-  "function genesisState(uint256 genesisId) view returns ((uint8 tier,uint16 multiplierBps,uint256 linkedPositionId) state)",
-  "function genesisTier(uint256 genesisId) view returns (uint8)",
-  "function genesisActivationCost(uint8 tier) view returns (uint256)",
   "function linkedPosition(uint256 genesisId) view returns (uint256)",
   "function linkedGenesis(uint256 positionId) view returns (uint256)",
-  "function positionRewardMultiplierBps(uint256 positionId) view returns (uint16)",
-  "function linkGenesis(uint256 genesisId,uint256 positionId)",
-  "function unlinkGenesis(uint256 genesisId)",
-  "function activateGenesis(uint256 genesisId,uint8 targetTier,uint256 maxBurn)",
+  "function linkGenesis(uint256 positionId,uint256 genesisId)",
+  "function unlinkGenesis(uint256 positionId,uint256 genesisId)",
+  "function genesisRecoveryVault() view returns (address)",
+  "function genesisRecoveryAsset() view returns (address)",
+  "function genesisRecoveryReady() view returns (bool)",
+  "function genesisIntegrationReady() view returns (bool)",
+  "function registerGenesis(uint256 genesisId)",
+  "function accrueGenesisRewards() returns (uint256 staticsAmount,uint256 numeraireAmount)",
+  "function claimGenesisRewards(uint256 genesisId,address asset,address receiver) returns (uint256 amount)",
+  "function claimGenesisOwnerRewards(address asset,address receiver) returns (uint256 amount)",
+  "function claimGenesisTreasuryRewards(address asset,address receiver) returns (uint256 amount)",
+  "function setGenesisRewardShareBps(uint16 newShareBps)",
+  "function pendingGenesisRewards(uint256 genesisId,address asset) view returns (uint256 amount)",
+  "function genesisRewardBook(address asset) view returns ((uint256 indexRay,uint256 indexRemainder,uint256 indexedAmount,uint256 crystallizedAmount,uint256 totalClaimable,uint256 totalClaimed,uint256 treasuryClaimable) book)",
+  "function genesisRegistered(uint256 genesisId) view returns (bool)",
+  "function genesisEffectiveWeight(uint256 genesisId) view returns (uint256)",
+  "function genesisTotalWeight() view returns (uint256)",
+  "function genesisRewardShareBps() view returns (uint16)",
+  "function genesisOwnerClaimable(address owner,address asset) view returns (uint256)",
+  "function pendingGenesisRecovery() view returns (uint256)",
+  "function genesisRewardCustodyAccount() pure returns (bytes32)",
   "function creatorRewardCredit(address creator,address asset) view returns (uint256)",
   "function partnerAccrued(address recipient,address asset) view returns (uint256)",
   "function partnerRecipient() view returns (address)",
@@ -1260,10 +1285,14 @@ export const staticsAbi = parseAbi([
   "event RewardAssetDustRouted(address indexed asset,uint256 amount)",
   "event RewardBookCheckpointed(address indexed asset)",
   "event PositionRewardSettled(uint256 indexed positionId,address indexed asset,uint256 amount)",
-  "event GenesisLinked(uint256 indexed genesisId,uint256 indexed positionId,address indexed owner)",
-  "event GenesisUnlinked(uint256 indexed genesisId,uint256 indexed positionId,address indexed owner)",
-  "event GenesisActivated(uint256 indexed genesisId,uint8 previousTier,uint8 newTier,uint256 burnedAmount,uint16 multiplierBps)",
-  "event GenesisActivationReset(uint256 indexed genesisId,address indexed previousOwner,address indexed newOwner)",
+  "event GenesisLinked(uint256 indexed positionId,uint256 indexed genesisId,address indexed owner,uint16 multiplierBps)",
+  "event GenesisUnlinked(uint256 indexed positionId,uint256 indexed genesisId,address indexed owner,uint16 previousMultiplierBps)",
+  "event GenesisRegistered(uint256 indexed genesisId,uint256 weight,uint256 totalWeight)",
+  "event GenesisWeightChanged(uint256 indexed genesisId,uint256 previousWeight,uint256 newWeight,uint256 totalWeight)",
+  "event GenesisRevenueAccrued(address indexed asset,uint256 amount,uint256 genesisAmount,uint256 treasuryAmount,uint256 indexRay)",
+  "event GenesisRewardsClaimed(uint256 indexed genesisId,address indexed owner,address indexed asset,address receiver,uint256 amount)",
+  "event GenesisOwnerRewardsClaimed(address indexed owner,address indexed asset,address indexed receiver,uint256 amount)",
+  "event GenesisTreasuryRewardsClaimed(address indexed asset,address indexed receiver,uint256 amount)",
   "event PartnerRevenueAccrued(address indexed recipient,address indexed asset,uint256 amount)",
   "event PartnerRevenueDistributed(address indexed recipient,address indexed asset,address indexed caller,uint256 grossAmount,uint256 distributedAmount,uint256 tip)",
   "event LiquidityIntegrationInstalled(address indexed poolManager,address indexed hook)",
@@ -1614,6 +1643,7 @@ export const staticsPositionErrorAbi = parseAbi([
   "error PositionInitializing(uint256 positionId)",
   "error PositionHasActiveLegs(uint256 positionId,uint256 activeLegCount)",
   "error PositionHasUnresolvedObligations(uint256 positionId,uint256 unresolvedObligationCount)",
+  "error PositionLocked(uint256 positionId)",
   "error AlreadyInitialized()",
   "error NotInitialized()",
   "error NotPositionOwnerOrApproved(uint256 positionId,address caller)",
@@ -1679,15 +1709,17 @@ export const staticsRewardsErrorAbi = parseAbi([
 ]);
 
 export const staticsGenesisErrorAbi = parseAbi([
-  "error GenesisOwnerMismatch(uint256 genesisId,address expected,address actual)",
-  "error PositionOwnerMismatch(uint256 positionId,address expected,address actual)",
-  "error UnauthorizedGenesisCollection(address caller)",
+  "error GenesisIntegrationNotReady()",
+  "error NotAssetOwner(uint256 tokenId,address caller,address owner)",
   "error GenesisAlreadyLinked(uint256 genesisId,uint256 positionId)",
   "error PositionAlreadyLinked(uint256 positionId,uint256 genesisId)",
-  "error GenesisNotLinked(uint256 genesisId)",
-  "error GenesisLinkedOnTransfer(uint256 genesisId,uint256 positionId)",
-  "error InvalidActivationTier(uint8 currentTier,uint8 targetTier)",
-  "error InvalidActivationCost(uint256 cost)",
+  "error GenesisLinkMismatch(uint256 positionId,uint256 genesisId)",
+  "error LinkedOwnerMismatch(uint256 genesisId,uint256 positionId,address genesisOwner,address positionOwner)",
+  "error GenesisAlreadyRegistered(uint256 genesisId)",
+  "error GenesisHeldByVault(uint256 genesisId)",
+  "error NotGenesisOwner(uint256 genesisId,address caller,address owner)",
+  "error InvalidRewardAsset(address asset)",
+  "error NoRewards()",
 ]);
 
 export const staticsProtocolRevenueErrorAbi = parseAbi([
@@ -1914,22 +1946,12 @@ export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex 
   });
 }
 
-export function buildActivateGenesisCall(genesisId: bigint, targetTier: number): Hex;
-export function buildActivateGenesisCall(genesisId: bigint, targetTier: number, maxBurn: bigint): Hex;
 export function buildActivateGenesisCall(
   genesisId: bigint,
   targetTier: number,
-  maxBurn?: bigint,
 ): Hex {
   if (!Number.isInteger(targetTier) || targetTier < 1 || targetTier > 4) {
     throw new Error("target Genesis tier must be between 1 and 4");
-  }
-  if (maxBurn !== undefined) {
-    return encodeFunctionData({
-      abi: staticsAbi,
-      functionName: "activateGenesis",
-      args: [genesisId, targetTier, maxBurn],
-    });
   }
   return encodeFunctionData({
     abi: genesisActivationRegistryAbi,
@@ -1971,6 +1993,37 @@ export function buildAccrueGenesisLaunchRewardsCall(): Hex {
     abi: genesisLaunchDistributorAbi,
     functionName: "accrue",
   });
+}
+
+export function buildRegisterGenesisRewardsCall(genesisId: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "registerGenesis", args: [genesisId] });
+}
+
+export function buildAccrueGenesisRewardsCall(): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "accrueGenesisRewards" });
+}
+
+export function buildClaimGenesisRewardsCall(genesisId: bigint, asset: Address, receiver: Address): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "claimGenesisRewards",
+    args: [genesisId, asset, receiver],
+  });
+}
+
+export function buildClaimGenesisOwnerRewardsCall(asset: Address, receiver: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "claimGenesisOwnerRewards", args: [asset, receiver] });
+}
+
+export function buildClaimGenesisTreasuryRewardsCall(asset: Address, receiver: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "claimGenesisTreasuryRewards", args: [asset, receiver] });
+}
+
+export function buildSetGenesisRewardShareBpsCall(newShareBps: number): Hex {
+  if (!Number.isInteger(newShareBps) || newShareBps < 0 || newShareBps > Number(BPS)) {
+    throw new Error("Genesis reward share must be an integer from 0 through 10000 BPS");
+  }
+  return encodeFunctionData({ abi: staticsAbi, functionName: "setGenesisRewardShareBps", args: [newShareBps] });
 }
 
 export function cumulativeGenesisActivationCost(
@@ -2436,12 +2489,12 @@ export function buildCheckpointRewardAssetsCall(assets: readonly Address[]): Hex
   return encodeFunctionData({ abi: staticsAbi, functionName: "checkpointRewardAssets", args: [assets] });
 }
 
-export function buildLinkGenesisCall(genesisId: bigint, positionId: bigint): Hex {
-  return encodeFunctionData({ abi: staticsAbi, functionName: "linkGenesis", args: [genesisId, positionId] });
+export function buildLinkGenesisCall(positionId: bigint, genesisId: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "linkGenesis", args: [positionId, genesisId] });
 }
 
-export function buildUnlinkGenesisCall(genesisId: bigint): Hex {
-  return encodeFunctionData({ abi: staticsAbi, functionName: "unlinkGenesis", args: [genesisId] });
+export function buildUnlinkGenesisCall(positionId: bigint, genesisId: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "unlinkGenesis", args: [positionId, genesisId] });
 }
 
 export function buildDistributePartnerRevenueCall(recipient: Address, asset: Address): Hex {
