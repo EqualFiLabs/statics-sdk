@@ -28,6 +28,13 @@ export const MAX_TICK = 887_272;
 export const STATICS_MAX_SUPPLY = 1_000_000_000n * 10n ** 18n;
 export const STATICS_TREASURY_ALLOCATION = 200_000_000n * 10n ** 18n;
 export const STATICS_DOPPLER_INVENTORY = 800_000_000n * 10n ** 18n;
+export const TREASURY_GENESIS_COUNT = 555n;
+export const TREASURY_GENESIS_FIRST_ID = 5_001n;
+export const TREASURY_GENESIS_LAST_ID = 5_555n;
+export const TREASURY_GENESIS_BACKING = 99_900_000n * 10n ** 18n;
+export const TREASURY_STATICS_VESTING_PRINCIPAL = 100_100_000n * 10n ** 18n;
+export const TREASURY_VESTING_DURATION = 60n * 24n * 60n * 60n;
+export const TREASURY_GENESIS_RELEASE_BATCH_CAP = 50n;
 export const DOPPLER_OWNER_FEE_SHARE = 5n * 10n ** 16n;
 export const STATICS_FEE_RECEIVER_SHARE = 95n * 10n ** 16n;
 export const GENESIS_COLLECTION_SIZE = 5_555n;
@@ -93,6 +100,7 @@ export const staticsGenesisAbi = parseAbi([
   "function symbol() view returns (string)",
   "function mintedSupply() view returns (uint256)",
   "function vault() view returns (address)",
+  "function treasuryVesting() view returns (address)",
   "function activationRegistry() view returns (address)",
   "function protocol() view returns (address)",
   "function launchFinalized() view returns (bool)",
@@ -141,6 +149,7 @@ export const staticsGenesisVaultAbi = parseAbi([
   "function epochActive() view returns (bool)",
   "function genesisEpochEnd() view returns (uint256)",
   "function reserveETH() view returns (uint256)",
+  "function tokenBacking() view returns (uint256)",
   "function vaultPrice() view returns (uint256)",
   "function nativeAcquisitionFee() view returns (uint256)",
   "function purchasesPaused() view returns (bool)",
@@ -148,7 +157,7 @@ export const staticsGenesisVaultAbi = parseAbi([
   "function vaultInventory() view returns (uint256)",
   "function requiredBacking() view returns (uint256)",
   "function isVaultInventory(uint256 tokenId) view returns (bool)",
-  "function vaultAccounting() view returns ((uint256 vaultPrice, uint256 maximumSupply, uint256 mintedSupply, uint256 vaultInventory, uint256 circulatingGenesis, uint256 tokenBacking, uint256 requiredBacking, uint256 tokenCustody, uint256 reserveETH, uint256 nativeCustody, uint256 genesisEpochEnd, bool epochActive, uint256 reserveBackingPerGenesis) accounting)",
+  "function vaultAccounting() view returns ((uint256 vaultPrice, uint256 maximumSupply, uint256 mintedSupply, uint256 vaultInventory, uint256 circulatingGenesis, uint256 tokenBacking, uint256 grossBacking, uint256 outstandingGenesisCredit, uint256 requiredBacking, uint256 tokenCustody, uint256 reserveETH, uint256 nativeCustody, uint256 genesisEpochEnd, bool epochActive, uint256 reserveBackingPerGenesis) accounting)",
   "event GenesisPurchased(address indexed payer, address indexed receiver, uint256 indexed tokenId, uint256 staticsPrice, uint256 reserveBuyIn, uint256 nativeFee)",
   "event GenesisRedeemed(address indexed owner, address indexed receiver, uint256 indexed tokenId, uint256 staticsPayout, uint256 reservePayout)",
   "event GenesisCollectionFinalized(address indexed collection)",
@@ -156,6 +165,42 @@ export const staticsGenesisVaultAbi = parseAbi([
   "event NativeAcquisitionFeeSet(uint256 previousFee, uint256 newFee)",
   "event ReserveFunded(address indexed contributor, uint256 amount, uint256 reserveETH)",
   "event PurchaseRefunded(address indexed payer, uint256 amount)",
+]);
+
+export const staticsTreasuryVestingAbi = parseAbi([
+  "function STATICS_SUPPLY() view returns (uint256)",
+  "function PROTOCOL_ALLOCATION() view returns (uint256)",
+  "function GENESIS_BACKING_COMMITMENT() view returns (uint256)",
+  "function STATICS_VESTING_PRINCIPAL() view returns (uint256)",
+  "function GENESIS_VESTING_PRINCIPAL() view returns (uint256)",
+  "function FIRST_GENESIS_ID() view returns (uint256)",
+  "function LAST_GENESIS_ID() view returns (uint256)",
+  "function VESTING_DURATION() view returns (uint256)",
+  "function MAX_GENESIS_RELEASE_BATCH() view returns (uint256)",
+  "function MAX_MULTICURVE_RESIDUAL() view returns (uint256)",
+  "function statics() view returns (address)",
+  "function genesisVault() view returns (address)",
+  "function genesis() view returns (address)",
+  "function recipientAdmin() view returns (address)",
+  "function withdrawalRecipient() view returns (address)",
+  "function bootstrapper() view returns (address)",
+  "function vestingStart() view returns (uint256)",
+  "function vestingEnd() view returns (uint256)",
+  "function releasedStatics() view returns (uint256)",
+  "function releasedGenesis() view returns (uint256)",
+  "function vestedStaticsAt(uint256 timestamp) view returns (uint256)",
+  "function vestedGenesisAt(uint256 timestamp) view returns (uint256)",
+  "function releasableStatics() view returns (uint256)",
+  "function releasableGenesis() view returns (uint256)",
+  "function nextGenesisId() view returns (uint256)",
+  "function vestingComplete() view returns (bool)",
+  "function releaseStatics() returns (uint256 amount)",
+  "function releaseGenesis(uint256 maxCount) returns (uint256 count)",
+  "function setWithdrawalRecipient(address newRecipient)",
+  "event TreasuryVestingBootstrapped(address indexed statics, address indexed genesisVault, address indexed genesis, uint256 vestingStart, uint256 residual)",
+  "event WithdrawalRecipientUpdated(address indexed previousRecipient, address indexed newRecipient)",
+  "event StaticsReleased(address indexed caller, address indexed recipient, uint256 amount, uint256 totalReleased)",
+  "event GenesisReleased(address indexed caller, address indexed recipient, uint256 indexed firstGenesisId, uint256 lastGenesisId, uint256 count, uint256 totalReleased)",
 ]);
 
 export const genesisActivationRegistryAbi = parseAbi([
@@ -1942,6 +1987,33 @@ export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex 
     abi: staticsGenesisVaultAbi,
     functionName: "redeemGenesis",
     args: [tokenId, receiver],
+  });
+}
+
+/// Builds a permissionless release of all currently vested treasury STATICS.
+/// The vesting contract always sends the assets to its configured withdrawal recipient.
+export function buildReleaseTreasuryStaticsCall(): Hex {
+  return encodeFunctionData({ abi: staticsTreasuryVestingAbi, functionName: "releaseStatics" });
+}
+
+/// Builds a permissionless release of currently vested treasury Genesis. Values above the
+/// onchain batch cap are clamped by the vesting contract; zero is rejected before encoding.
+export function buildReleaseTreasuryGenesisCall(maxCount: bigint): Hex {
+  if (maxCount <= 0n) throw new Error("treasury Genesis release count must be positive");
+  return encodeFunctionData({
+    abi: staticsTreasuryVestingAbi,
+    functionName: "releaseGenesis",
+    args: [maxCount],
+  });
+}
+
+/// Builds the governance-only recipient recovery call. This changes only the destination of
+/// future releases and cannot change vesting principal or timing.
+export function buildSetTreasuryWithdrawalRecipientCall(newRecipient: Address): Hex {
+  return encodeFunctionData({
+    abi: staticsTreasuryVestingAbi,
+    functionName: "setWithdrawalRecipient",
+    args: [newRecipient],
   });
 }
 
