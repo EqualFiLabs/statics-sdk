@@ -1950,9 +1950,9 @@ export const staticsDollarErrorAbi = parseAbi([
 ]);
 
 /// Builds a Genesis acquisition. `maxNativeValue` is the maximum native ETH the caller
-/// authorizes: during the Genesis Epoch it is zero, and after the epoch it must cover the
-/// reserve buy-in plus the native acquisition fee. Any excess is refunded on-chain. Read
-/// `quoteGenesisPurchase().requiredNative` for the current amount.
+/// authorizes. During the Genesis Epoch it must cover the native acquisition fee; after the
+/// epoch it must cover the reserve buy-in plus that fee. Any excess is refunded on-chain.
+/// Read `quoteGenesisPurchase().requiredNative` for the current amount.
 export function buildBuyGenesisTransaction(
   tokenId: bigint,
   receiver: Address,
