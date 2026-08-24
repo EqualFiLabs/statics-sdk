@@ -40,9 +40,9 @@ treasury, not a Genesis backing residual.
 During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) acquisition and
 redemption move STATICS only: a buy costs exactly 180,000 STATICS with zero
 native value and redemption returns exactly 180,000 STATICS. After the epoch a
-buy additionally charges a reserve buy-in of `ceil(reserveETH / 5,554)` plus the
+buy additionally charges a reserve buy-in of `ceil(reserveETH / 5_554)` plus the
 native acquisition fee — both permanently enter the reserve — while redemption
-additionally pays `floor(reserveETH / 5,555)`. `buildBuyGenesisTransaction`'s
+additionally pays `floor(reserveETH / 5_555)`. `buildBuyGenesisTransaction`'s
 native `value` is a maximum: the vault refunds any excess on-chain, so read
 `quoteGenesisPurchase().requiredNative` immediately before building.
 `buildDonateGenesisReserveTransaction` performs a permissionless, irreversible

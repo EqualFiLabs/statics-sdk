@@ -265,6 +265,8 @@ describe("standalone Statics Genesis", () => {
   });
 
   it("exposes the fixed reserve economics constants and activation bindings", () => {
+    expect(GENESIS_RESERVE_DENOMINATOR).toBe(GENESIS_COLLECTION_SIZE);
+    expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(GENESIS_COLLECTION_SIZE - 1n);
     expect(GENESIS_RESERVE_DENOMINATOR).toBe(5_555n);
     expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(5_554n);
     expect(GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE).toBe(3n * 10n ** 15n);
