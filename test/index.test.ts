@@ -305,6 +305,15 @@ describe("standalone Statics Genesis", () => {
     expect(TREASURY_GENESIS_RELEASE_BATCH_CAP).toBe(50n);
     expect(getAbiItem({ abi: staticsGenesisAbi, name: "treasuryVesting" })).toBeDefined();
     expect(getAbiItem({ abi: staticsGenesisVaultAbi, name: "tokenBacking" })).toBeDefined();
+    const vaultAccounting = getAbiItem({ abi: staticsGenesisVaultAbi, name: "vaultAccounting" });
+    expect(vaultAccounting).toMatchObject({
+      outputs: [{
+        components: expect.arrayContaining([
+          { name: "grossBacking", type: "uint256" },
+          { name: "outstandingGenesisCredit", type: "uint256" },
+        ]),
+      }],
+    });
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "vestingComplete" })).toBeDefined();
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "GenesisReleased" })).toBeDefined();
   });
