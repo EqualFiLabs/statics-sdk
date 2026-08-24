@@ -2783,12 +2783,19 @@ export function buildQuotePoolCall(params: CreatePoolParams): Hex {
   });
 }
 
-export function buildCreatePoolCall(params: CreatePoolParams, creatorAuthorization: Hex = "0x"): Hex {
-  return encodeFunctionData({
-    abi: staticsAbi,
-    functionName: "createPool",
-    args: [coerceCreatePoolParams(params), creatorAuthorization],
-  });
+export function buildCreatePoolTransaction(
+  params: CreatePoolParams,
+  creationFee: bigint,
+  creatorAuthorization: Hex = "0x",
+): PreparedTransaction {
+  return {
+    data: encodeFunctionData({
+      abi: staticsAbi,
+      functionName: "createPool",
+      args: [coerceCreatePoolParams(params), creatorAuthorization],
+    }),
+    value: _validateUint256(creationFee, "creationFee"),
+  };
 }
 
 export function buildInvalidatePoolCreationNonceCall(nonce: bigint): Hex {
