@@ -13,6 +13,12 @@ receiver, and the temporary launch reward distributor. The exported calldata
 builders cover Genesis acquisition, redemption, activation, registration, and
 both NFT-owned and crystallized previous-owner reward claims.
 
+After the full-protocol handoff, use the Diamond builders ending in
+`GenesisRewardsCall` for the permanent reward interval. Launch-era claims stay
+on `GenesisLaunchDistributor`; they are not migrated. Permanent registration
+follows the Genesis token across transfer, while activation resets to Tier 0
+and prior-owner rewards crystallize separately.
+
 The stock Doppler Multicurve initializer assigns 5% of fees earned by its
 launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
 fee receiver. The exported share constants and module bindings describe that
@@ -31,15 +37,34 @@ manifest.
 
 The fixed accounting constants distinguish the 200 million-token treasury
 allocation from the 800 million-token Doppler inventory. All 5,555 Genesis NFTs
-start in the vault, each representing a fixed 180,018 STATICS redemption claim.
-The resulting 999,999,990-token full backing leaves the intentional 10 STATICS
-paired-supply residual described by the Genesis ADR.
+start in the vault, each representing a fixed 180,000 STATICS redemption claim
+plus, after the immutable Genesis Epoch, a 1/5,555 share of a permanent native
+ETH reserve. The 5,555 * 180,000 = 999,900,000-STATICS full backing leaves the
+remaining 100,000 STATICS as unpaired supply for the public Doppler market and
+treasury, not a Genesis backing residual.
 
-`splitSwapFee` mirrors the bilateral swap-fee split across locked liquidity,
-activated protocol-pool LPs, deposited BasketToken positions, global Statics
-stakers, StonkBrokers, index creators, and treasury. Treasury receives division
-dust. Unavailable LP and Basket-staker allocations redirect to locked liquidity;
-an unavailable Statics-staker allocation redirects to treasury.
+During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) acquisition and
+redemption move STATICS only: a buy costs exactly 180,000 STATICS with zero
+native value and redemption returns exactly 180,000 STATICS. After the epoch a
+buy additionally charges a reserve buy-in of `ceil(reserveETH / 5_554)` plus the
+native acquisition fee — both permanently enter the reserve — while redemption
+additionally pays `floor(reserveETH / 5_555)`. `buildBuyGenesisTransaction`'s
+native `value` is a maximum: the vault refunds any excess on-chain, so read
+`quoteGenesisPurchase().requiredNative` immediately before building.
+`buildDonateGenesisReserveTransaction` performs a permissionless, irreversible
+reserve capitalization; the reserve has no withdrawal path. The fee receiver
+splits a configurable `reserveShareBps` (0..10,000) of harvested WETH into the
+reserve — unwrapping and donating atomically — and attributes all STATICS and
+the WETH remainder to the active distributor. Activation forwards its exact
+STATICS cost to the treasury and never burns STATICS.
+
+`splitSwapFee` mirrors the bilateral swap-fee split across protocol-owned
+liquidity, activated protocol-pool LPs, deposited BasketToken positions, global
+Statics stakers, the fixed 5% pool creator, and treasury. The five configurable
+class shares always total 9,500 basis points and the creator share is a fixed
+500. Treasury receives division dust. Unavailable LP and basket-staker
+allocations redirect to protocol-owned liquidity; an unavailable Statics-staker
+allocation redirects to treasury; the creator share never falls back.
 
 `quoteMint` and `quoteRedeem` select the greatest qualifying static fee tier
 and reproduce the aggregate-supply rounding used onchain. They do not model a
@@ -80,6 +105,13 @@ only the new amount enters the pending tranche. Read `rewardSelection` for the
 exact timestamp and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
+
+`stakePosition` distinguishes raw `stakedBalance` from the current
+`rewardMultiplierBps`; reward-asset and selection reads expose both raw stake
+and effective weight. `buildLinkGenesisCall(positionId, genesisId)` and
+`buildUnlinkGenesisCall(positionId, genesisId)` use the exact Diamond ABI. A
+linked pair cannot transfer independently, and linking moves neither NFT into
+Diamond custody.
 
 Statics Dollar builders cover the typed ETH/WETH deposit and ordinary
 recombination gateway exposed by the same Diamond. Permit variants carry the
@@ -132,17 +164,35 @@ permanently seeds every canonical pool. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 
-Timelocked governance can create an unrelated protocol pool between any two
-compatible ERC-20s with `buildCreateGovernancePoolCall`. Use
-`encodeSqrtPriceBPerAX96` for its raw token-B-per-token-A price and simulate
-`quoteGovernancePool` through `staticsAbi` before constructing the timelock
-proposal. The payer approves the Diamond; registration, initialization, exact
-funding, and permanent seeding remain atomic.
+Anyone can permissionlessly create an unrelated protocol pool between any two
+compatible ERC-20s with `buildCreatePoolTransaction`. Assemble the `CreatePoolParams`
+by sorting the pair with `sortPoolCurrencies` and encoding the raw
+token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
+to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
+`quoteProtocolPool` (or `buildQuotePoolCall`) before submission to recover the
+canonical `poolId` and the normalized `sqrtPriceX96`. When creation requires an
+authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
+EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `1`, the
+chain id, and the Diamond as `verifyingContract`, over the normalized
+`sqrtPriceX96` — and `computeCreatePoolAuthorizationDigest` reproduces the exact
+digest the Diamond verifies. Read `quotePool(params).creationFee` immediately
+before calling `buildCreatePoolTransaction(params, creationFee, creatorAuthorization)`;
+the returned transaction includes that fee as `value`
+(`buildSetPoolCreationFeeCall` administers it).
+`buildInvalidatePoolCreationNonceCall` burns an unused creator nonce. General
+pool creation requires no token approvals, no initial funding, and no mandatory
+permanent-liquidity seed: a general pool initializes with zero liquidity and
+grows protocol-owned liquidity from subsequent swap activity.
 
-`protocolPool(poolId)` normalizes basket canonical and governance-created
-pools. The PoolId fee builders work for either class. Governance pools have no
-basket reward book, and `buildDecommissionGovernancePoolCall` performs their
-irreversible treasury recovery without touching user LP NFTs.
+`protocolPool(poolId)` normalizes basket canonical and permissionlessly created
+protocol pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
+and `totalCreatorRevenue` cover discovery and revenue reads. Fee administration
+uses `buildSetProtocolPoolFeeRateCall`, `buildSetBasketFeeAllocationCall`, and
+`buildSetGeneralFeeAllocationCall`; the PoolId fee builders work for either
+class. Pool creators claim their accrued 5% revenue share with
+`buildClaimCreatorRevenueCall`, and `buildDecommissionGeneralPoolCall` performs
+the irreversible treasury recovery of a non-basket pool without touching user
+LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Governance
 uses the Diamond for fee configuration. Reward and treasury distribution,
@@ -162,14 +212,19 @@ match the swap exactly.
 `quoteHookFee` rounds either realized bilateral fee leg up exactly as the hook
 does. `effectiveCanonicalFees` reports the zero native LP fee and the separate
 input/output hook rates; the launch defaults are 25 basis points on each leg.
-`splitSwapFee` applies the default 10% locked-liquidity, 20% canonical-LP, 20%
-basket-staker, 15% global Statics-staker, 10% StonkBrokers, 5% index-creator,
-and 20% treasury allocation after a leg is charged. Callers supply each reward
-destination's eligibility independently. Matched locked liquidity is added as
+`splitSwapFee` carves the fixed 5% creator share first, then applies the active
+class allocation profile's five configurable shares — protocol-owned liquidity,
+canonical LP, basket-staker, global Statics-staker, and treasury — which always
+total 9,500 basis points. Callers supply each reward destination's eligibility
+independently: an unavailable LP or basket-staker share routes to protocol-owned
+liquidity, an unavailable Statics-staker share routes to treasury, the creator
+share never falls back, and treasury absorbs the rounding dust. Matched locked
+liquidity is added as
 hook-owned full-range liquidity during the swap.
 
-Genesis builders activate tiers by burning the cumulative configured STATICS
-cost, link one activated Genesis NFT to one PositionNFT, and unlink it before
+Genesis builders activate tiers by paying the cumulative configured STATICS
+cost — forwarded in full to the treasury, never burned — link one activated
+Genesis NFT to one PositionNFT, and unlink it before
 either NFT transfers. Activation resets on an ownership-changing Genesis
 transfer. Reward reads distinguish actual stake from multiplier-adjusted
 effective weight. Before a weight-changing action, clients should check each
