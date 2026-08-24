@@ -10,6 +10,7 @@ export const staticsGenesisCreditAbi = parseAbi([
   "function extendGenesisCredit(uint256 genesisId) payable",
   "function repayGenesisCredit(uint256 genesisId)",
   "function recoverGenesisCredit(uint256 genesisId)",
+  "function epochActive() view returns (bool)",
   "function creditLimit(uint256 genesisId) view returns (uint256)",
   "function credit(uint256 genesisId) view returns ((address owner, uint256 principal, uint40 maturity, uint40 recoverableAt, bool active) state)",
   "function creditActive(uint256 genesisId) view returns (bool)",
