@@ -71,7 +71,7 @@ import {
   buildUnlinkGenesisCall,
   buildSetCanonicalPoolFeeConfigurationCall,
   buildQuotePoolCall,
-  buildCreatePoolCall,
+  buildCreatePoolTransaction,
   buildInvalidatePoolCreationNonceCall,
   buildSetPoolCreationFeeCall,
   buildSetProtocolPoolFeeRateCall,
@@ -271,6 +271,8 @@ describe("standalone Statics Genesis", () => {
   });
 
   it("exposes the fixed reserve economics constants and activation bindings", () => {
+    expect(GENESIS_RESERVE_DENOMINATOR).toBe(GENESIS_COLLECTION_SIZE);
+    expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(GENESIS_COLLECTION_SIZE - 1n);
     expect(GENESIS_RESERVE_DENOMINATOR).toBe(5_555n);
     expect(GENESIS_RESERVE_BUY_IN_DENOMINATOR).toBe(5_554n);
     expect(GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE).toBe(3n * 10n ** 15n);
@@ -469,20 +471,29 @@ describe("Statics static basket quotes", () => {
     expect(createParams.sqrtPriceBPerAX96).toBe(Q96);
     expect(decodeFunctionData({ abi: staticsAbi, data: buildQuotePoolCall(createParams) }).functionName)
       .toBe("quotePool");
+    const createTransaction = buildCreatePoolTransaction(createParams, 1_000n, "0xabcd");
+    expect(createTransaction.value).toBe(1_000n);
     const createData = decodeFunctionData({
       abi: staticsAbi,
-      data: buildCreatePoolCall(createParams, "0xabcd"),
+      data: createTransaction.data,
     });
     expect(createData.functionName).toBe("createPool");
     expect(createData.args?.[1]).toBe("0xabcd");
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildCreatePoolCall(createParams) }).args?.[1]).toBe("0x");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildCreatePoolTransaction(createParams, 0n).data,
+    }).args?.[1]).toBe("0x");
 
-    expect(() => buildCreatePoolCall({ ...createParams, feeRate: { inputFeeBps: 150n, outputFeeBps: 60n } }))
+    expect(() => buildCreatePoolTransaction(
+      { ...createParams, feeRate: { inputFeeBps: 150n, outputFeeBps: 60n } },
+      0n,
+    ))
       .toThrow("combined pool fee rate exceeds 200 BPS");
-    expect(() => buildCreatePoolCall({ ...createParams, tickSpacing: 0 }))
+    expect(() => buildCreatePoolTransaction({ ...createParams, tickSpacing: 0 }, 0n))
       .toThrow("tick spacing outside protocol bounds");
-    expect(() => buildCreatePoolCall({ ...createParams, tickSpacing: 32_768 }))
+    expect(() => buildCreatePoolTransaction({ ...createParams, tickSpacing: 32_768 }, 0n))
       .toThrow("tick spacing outside protocol bounds");
+    expect(() => buildCreatePoolTransaction(createParams, -1n)).toThrow("creationFee exceeds uint256");
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildInvalidatePoolCreationNonceCall(9n) }))
       .toEqual({ functionName: "invalidatePoolCreationNonce", args: [9n] });

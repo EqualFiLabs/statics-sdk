@@ -46,9 +46,9 @@ treasury, not a Genesis backing residual.
 During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) acquisition and
 redemption move STATICS only: a buy costs exactly 180,000 STATICS with zero
 native value and redemption returns exactly 180,000 STATICS. After the epoch a
-buy additionally charges a reserve buy-in of `ceil(reserveETH / 5,554)` plus the
+buy additionally charges a reserve buy-in of `ceil(reserveETH / 5_554)` plus the
 native acquisition fee — both permanently enter the reserve — while redemption
-additionally pays `floor(reserveETH / 5,555)`. `buildBuyGenesisTransaction`'s
+additionally pays `floor(reserveETH / 5_555)`. `buildBuyGenesisTransaction`'s
 native `value` is a maximum: the vault refunds any excess on-chain, so read
 `quoteGenesisPurchase().requiredNative` immediately before building.
 `buildDonateGenesisReserveTransaction` performs a permissionless, irreversible
@@ -165,7 +165,7 @@ or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 
 Anyone can permissionlessly create an unrelated protocol pool between any two
-compatible ERC-20s with `buildCreatePoolCall`. Assemble the `CreatePoolParams`
+compatible ERC-20s with `buildCreatePoolTransaction`. Assemble the `CreatePoolParams`
 by sorting the pair with `sortPoolCurrencies` and encoding the raw
 token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
 to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
@@ -175,8 +175,10 @@ authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
 EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `1`, the
 chain id, and the Diamond as `verifyingContract`, over the normalized
 `sqrtPriceX96` — and `computeCreatePoolAuthorizationDigest` reproduces the exact
-digest the Diamond verifies. `buildCreatePoolCall(params, creatorAuthorization)`
-carries the payable creation fee (`buildSetPoolCreationFeeCall` administers it);
+digest the Diamond verifies. Read `quotePool(params).creationFee` immediately
+before calling `buildCreatePoolTransaction(params, creationFee, creatorAuthorization)`;
+the returned transaction includes that fee as `value`
+(`buildSetPoolCreationFeeCall` administers it).
 `buildInvalidatePoolCreationNonceCall` burns an unused creator nonce. General
 pool creation requires no token approvals, no initial funding, and no mandatory
 permanent-liquidity seed: a general pool initializes with zero liquidity and

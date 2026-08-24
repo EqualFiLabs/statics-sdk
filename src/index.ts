@@ -35,9 +35,9 @@ export const GENESIS_VAULT_PRICE = 180_000n * 10n ** 18n;
 export const GENESIS_FULL_BACKING = GENESIS_COLLECTION_SIZE * GENESIS_VAULT_PRICE;
 export const GENESIS_SUPPLY_RESIDUAL = STATICS_MAX_SUPPLY - GENESIS_FULL_BACKING;
 /// Fixed reserve denominator. Never depends on circulating or vault-held Genesis.
-export const GENESIS_RESERVE_DENOMINATOR = 5_555n;
+export const GENESIS_RESERVE_DENOMINATOR = GENESIS_COLLECTION_SIZE;
 /// Self-consistent post-epoch buy-in denominator (N - 1).
-export const GENESIS_RESERVE_BUY_IN_DENOMINATOR = 5_554n;
+export const GENESIS_RESERVE_BUY_IN_DENOMINATOR = GENESIS_COLLECTION_SIZE - 1n;
 export const GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE = 3n * 10n ** 15n;
 export const GENESIS_MAX_NATIVE_ACQUISITION_FEE = 10n * 10n ** 15n;
 
@@ -1932,7 +1932,6 @@ export function buildDonateGenesisReserveTransaction(nativeAmount: bigint): Prep
     data: encodeFunctionData({
       abi: staticsGenesisVaultAbi,
       functionName: "donate",
-      args: [],
     }),
     value: nativeAmount,
   };
@@ -2883,12 +2882,19 @@ export function buildQuotePoolCall(params: CreatePoolParams): Hex {
   });
 }
 
-export function buildCreatePoolCall(params: CreatePoolParams, creatorAuthorization: Hex = "0x"): Hex {
-  return encodeFunctionData({
-    abi: staticsAbi,
-    functionName: "createPool",
-    args: [coerceCreatePoolParams(params), creatorAuthorization],
-  });
+export function buildCreatePoolTransaction(
+  params: CreatePoolParams,
+  creationFee: bigint,
+  creatorAuthorization: Hex = "0x",
+): PreparedTransaction {
+  return {
+    data: encodeFunctionData({
+      abi: staticsAbi,
+      functionName: "createPool",
+      args: [coerceCreatePoolParams(params), creatorAuthorization],
+    }),
+    value: _validateUint256(creationFee, "creationFee"),
+  };
 }
 
 export function buildInvalidatePoolCreationNonceCall(nonce: bigint): Hex {
