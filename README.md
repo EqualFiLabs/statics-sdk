@@ -19,6 +19,12 @@ on `GenesisLaunchDistributor`; they are not migrated. Permanent registration
 follows the Genesis token across transfer, while activation resets to Tier 0
 and prior-owner rewards crystallize separately.
 
+The claim-all builders accept the Genesis IDs currently owned by the caller and
+claim their attached rewards plus all crystallized prior-owner credits across
+STATICS and WETH. The contracts harvest once before settlement and transfer
+each nonzero asset once. Use an empty Genesis ID list for an owner-credit-only
+claim. Launch and permanent claim-all calls remain separate after handoff.
+
 The stock Doppler Multicurve initializer assigns 5% of fees earned by its
 launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
 fee receiver. The exported share constants and module bindings describe that

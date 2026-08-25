@@ -27,6 +27,10 @@ import {
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
   buildClaimGenesisLaunchRewardsCall,
+  buildClaimAllGenesisLaunchRewardsCall,
+  buildClaimAllGenesisLaunchTreasuryRewardsCall,
+  buildClaimAllGenesisRewardsCall,
+  buildClaimAllGenesisTreasuryRewardsCall,
   buildClaimGenesisRewardsCall,
   buildClaimGenesisOwnerRewardsCall,
   buildClaimGenesisTreasuryRewardsCall,
@@ -355,6 +359,14 @@ describe("standalone Statics Genesis", () => {
       abi: genesisLaunchDistributorAbi,
       data: buildClaimOwnerGenesisLaunchRewardsCall(assetA, receiver),
     })).toEqual({ functionName: "claimOwnerRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimAllGenesisLaunchRewardsCall([41n, 42n], receiver),
+    })).toEqual({ functionName: "claimAllGenesisRewards", args: [[41n, 42n], receiver] });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimAllGenesisLaunchTreasuryRewardsCall(receiver),
+    })).toEqual({ functionName: "claimAllGenesisTreasuryRewards", args: [receiver] });
   });
 
   it("sums sequential activation costs", () => {
@@ -1555,6 +1567,10 @@ describe("Statics unified calldata", () => {
       .toEqual({ functionName: "claimGenesisOwnerRewards", args: [assetA, receiver] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimGenesisTreasuryRewardsCall(assetA, receiver) }))
       .toEqual({ functionName: "claimGenesisTreasuryRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimAllGenesisRewardsCall([8n, 9n], receiver) }))
+      .toEqual({ functionName: "claimAllGenesisRewards", args: [[8n, 9n], receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimAllGenesisTreasuryRewardsCall(receiver) }))
+      .toEqual({ functionName: "claimAllGenesisTreasuryRewards", args: [receiver] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildSetGenesisRewardShareBpsCall(5_000) }))
       .toEqual({ functionName: "setGenesisRewardShareBps", args: [5_000] });
     expect(() => buildSetGenesisRewardShareBpsCall(10_001)).toThrow("0 through 10000 BPS");

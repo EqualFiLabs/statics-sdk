@@ -260,6 +260,8 @@ export const genesisLaunchDistributorAbi = parseAbi([
   "function accrue() returns (uint256 staticsAmount, uint256 numeraireAmount)",
   "function claimGenesis(uint256 genesisId, address asset, address receiver) returns (uint256 amount)",
   "function claimOwnerRewards(address asset, address receiver) returns (uint256 amount)",
+  "function claimAllGenesisRewards(uint256[] genesisIds, address receiver) returns (uint256 staticsAmount, uint256 numeraireAmount)",
+  "function claimAllGenesisTreasuryRewards(address receiver) returns (uint256 staticsAmount, uint256 numeraireAmount)",
   "function pendingGenesis(uint256 genesisId, address asset) view returns (uint256 amount)",
   "function registered(uint256 genesisId) view returns (bool)",
   "function effectiveWeight(uint256 genesisId) view returns (uint256)",
@@ -1161,6 +1163,8 @@ export const staticsAbi = parseAbi([
   "function claimGenesisRewards(uint256 genesisId,address asset,address receiver) returns (uint256 amount)",
   "function claimGenesisOwnerRewards(address asset,address receiver) returns (uint256 amount)",
   "function claimGenesisTreasuryRewards(address asset,address receiver) returns (uint256 amount)",
+  "function claimAllGenesisRewards(uint256[] genesisIds,address receiver) returns (uint256 staticsAmount,uint256 numeraireAmount)",
+  "function claimAllGenesisTreasuryRewards(address receiver) returns (uint256 staticsAmount,uint256 numeraireAmount)",
   "function setGenesisRewardShareBps(uint16 newShareBps)",
   "function pendingGenesisRewards(uint256 genesisId,address asset) view returns (uint256 amount)",
   "function genesisRewardBook(address asset) view returns ((uint256 indexRay,uint256 indexRemainder,uint256 indexedAmount,uint256 crystallizedAmount,uint256 totalClaimable,uint256 totalClaimed,uint256 treasuryClaimable) book)",
@@ -2059,6 +2063,22 @@ export function buildClaimOwnerGenesisLaunchRewardsCall(asset: Address, receiver
   });
 }
 
+export function buildClaimAllGenesisLaunchRewardsCall(genesisIds: readonly bigint[], receiver: Address): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "claimAllGenesisRewards",
+    args: [genesisIds, receiver],
+  });
+}
+
+export function buildClaimAllGenesisLaunchTreasuryRewardsCall(receiver: Address): Hex {
+  return encodeFunctionData({
+    abi: genesisLaunchDistributorAbi,
+    functionName: "claimAllGenesisTreasuryRewards",
+    args: [receiver],
+  });
+}
+
 export function buildAccrueGenesisLaunchRewardsCall(): Hex {
   return encodeFunctionData({
     abi: genesisLaunchDistributorAbi,
@@ -2088,6 +2108,14 @@ export function buildClaimGenesisOwnerRewardsCall(asset: Address, receiver: Addr
 
 export function buildClaimGenesisTreasuryRewardsCall(asset: Address, receiver: Address): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "claimGenesisTreasuryRewards", args: [asset, receiver] });
+}
+
+export function buildClaimAllGenesisRewardsCall(genesisIds: readonly bigint[], receiver: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "claimAllGenesisRewards", args: [genesisIds, receiver] });
+}
+
+export function buildClaimAllGenesisTreasuryRewardsCall(receiver: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "claimAllGenesisTreasuryRewards", args: [receiver] });
 }
 
 export function buildSetGenesisRewardShareBpsCall(newShareBps: number): Hex {
