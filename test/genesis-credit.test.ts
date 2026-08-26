@@ -31,15 +31,15 @@ describe("Genesis secured credit bindings", () => {
   });
 
   it("builds extension, repayment, and recovery calldata", () => {
-    const extension = buildExtendGenesisCreditTransaction(7n, 9n);
+    const extension = buildExtendGenesisCreditTransaction(7n, 120n, 9n);
     expect(extension.value).toBe(9n);
     expect(decodeFunctionData({ abi: staticsGenesisCreditAbi, data: extension.data })).toEqual({
       functionName: "extendGenesisCredit",
-      args: [7n],
+      args: [7n, 120n],
     });
-    expect(decodeFunctionData({ abi: staticsGenesisCreditAbi, data: buildRepayGenesisCreditCall(7n) })).toEqual({
+    expect(decodeFunctionData({ abi: staticsGenesisCreditAbi, data: buildRepayGenesisCreditCall(7n, 20n) })).toEqual({
       functionName: "repayGenesisCredit",
-      args: [7n],
+      args: [7n, 20n],
     });
     expect(decodeFunctionData({ abi: staticsGenesisCreditAbi, data: buildRecoverGenesisCreditCall(7n) })).toEqual({
       functionName: "recoverGenesisCredit",
