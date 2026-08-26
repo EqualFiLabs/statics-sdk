@@ -19,6 +19,12 @@ on `GenesisLaunchDistributor`; they are not migrated. Permanent registration
 follows the Genesis token across transfer, while activation resets to Tier 0
 and prior-owner rewards crystallize separately.
 
+The claim-all builders accept the Genesis IDs currently owned by the caller and
+claim their attached rewards plus all crystallized prior-owner credits across
+STATICS and WETH. The contracts harvest once before settlement and transfer
+each nonzero asset once. Use an empty Genesis ID list for an owner-credit-only
+claim. Launch and permanent claim-all calls remain separate after handoff.
+
 The stock Doppler Multicurve initializer assigns 5% of fees earned by its
 launch positions to the Doppler/Airlock owner and 95% to the permanent Statics
 fee receiver. The exported share constants and module bindings describe that
@@ -43,13 +49,14 @@ ETH reserve. The 5,555 * 180,000 = 999,900,000-STATICS full backing leaves the
 remaining 100,000 STATICS as unpaired supply for the public Doppler market and
 treasury, not a Genesis backing residual.
 
-During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) acquisition and
-redemption move STATICS only: a buy costs exactly 180,000 STATICS with zero
-native value and redemption returns exactly 180,000 STATICS. After the epoch a
-buy additionally charges a reserve buy-in of `ceil(reserveETH / 5_554)` plus the
-native acquisition fee — both permanently enter the reserve — while redemption
-additionally pays `floor(reserveETH / 5_555)`. `buildBuyGenesisTransaction`'s
-native `value` is a maximum: the vault refunds any excess on-chain, so read
+During the Genesis Epoch (`block.timestamp < genesisEpochEnd`) a buy costs
+exactly 180,000 STATICS plus the native acquisition fee. The reserve buy-in is
+waived, the fee permanently enters the reserve, and redemption returns exactly
+180,000 STATICS with zero native value. After the epoch a buy additionally
+charges a reserve buy-in of `ceil(reserveETH / 5_554)`; the buy-in and native
+acquisition fee both permanently enter the reserve, while redemption additionally
+pays `floor(reserveETH / 5_555)`. `buildBuyGenesisTransaction`'s native `value`
+is a maximum: the vault refunds any excess on-chain, so read
 `quoteGenesisPurchase().requiredNative` immediately before building.
 `buildDonateGenesisReserveTransaction` performs a permissionless, irreversible
 reserve capitalization; the reserve has no withdrawal path. The fee receiver

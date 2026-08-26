@@ -27,6 +27,10 @@ import {
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
   buildClaimGenesisLaunchRewardsCall,
+  buildClaimAllGenesisLaunchRewardsCall,
+  buildClaimAllGenesisLaunchTreasuryRewardsCall,
+  buildClaimAllGenesisRewardsCall,
+  buildClaimAllGenesisTreasuryRewardsCall,
   buildClaimGenesisRewardsCall,
   buildClaimGenesisOwnerRewardsCall,
   buildClaimGenesisTreasuryRewardsCall,
@@ -56,11 +60,15 @@ import {
   buildApproveV4PositionCall,
   buildRedeemPeggedCall,
   buildRedeemGenesisCall,
+  buildReleaseTreasuryGenesisCall,
+  buildReleaseTreasuryStaticsCall,
+  buildSweepTreasuryStaticsSurplusCall,
   buildRedeemPeggedWithPermitCall,
   buildRecoverCall,
   buildRepayCall,
   buildExtendCall,
   buildSetSwapFeeConfigurationCall,
+  buildSetTreasuryWithdrawalRecipientCall,
   buildSetGenesisRewardShareBpsCall,
   buildSetPositionCreationFeeCall,
   buildActivateGenesisCall,
@@ -119,6 +127,13 @@ import {
   GENESIS_RESERVE_BUY_IN_DENOMINATOR,
   GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE,
   GENESIS_MAX_NATIVE_ACQUISITION_FEE,
+  TREASURY_GENESIS_BACKING,
+  TREASURY_GENESIS_COUNT,
+  TREASURY_GENESIS_FIRST_ID,
+  TREASURY_GENESIS_LAST_ID,
+  TREASURY_GENESIS_RELEASE_BATCH_CAP,
+  TREASURY_STATICS_VESTING_PRINCIPAL,
+  TREASURY_VESTING_DURATION,
   POSITION_PORTFOLIO_MAX_PAGE_SIZE,
   Q128,
   Q96,
@@ -137,6 +152,7 @@ import {
   genesisActivationRegistryAbi,
   genesisLaunchDistributorAbi,
   staticsGenesisVaultAbi,
+  staticsTreasuryVestingAbi,
   STATICS_DOPPLER_INVENTORY,
   STATICS_FEE_RECEIVER_SHARE,
   STATICS_MAX_SUPPLY,
@@ -281,6 +297,53 @@ describe("standalone Statics Genesis", () => {
     expect(getAbiItem({ abi: genesisActivationRegistryAbi, name: "treasury" })).toBeDefined();
   });
 
+  it("exports the treasury Genesis backing and immutable vesting constants", () => {
+    expect(TREASURY_GENESIS_COUNT).toBe(555n);
+    expect(TREASURY_GENESIS_FIRST_ID).toBe(5_001n);
+    expect(TREASURY_GENESIS_LAST_ID).toBe(5_555n);
+    expect(TREASURY_GENESIS_LAST_ID - TREASURY_GENESIS_FIRST_ID + 1n).toBe(TREASURY_GENESIS_COUNT);
+    expect(TREASURY_GENESIS_BACKING).toBe(TREASURY_GENESIS_COUNT * GENESIS_VAULT_PRICE);
+    expect(TREASURY_GENESIS_BACKING + TREASURY_STATICS_VESTING_PRINCIPAL).toBe(
+      STATICS_TREASURY_ALLOCATION,
+    );
+    expect(TREASURY_VESTING_DURATION).toBe(60n * 24n * 60n * 60n);
+    expect(TREASURY_GENESIS_RELEASE_BATCH_CAP).toBe(50n);
+    expect(getAbiItem({ abi: staticsGenesisAbi, name: "treasuryVesting" })).toBeDefined();
+    expect(getAbiItem({ abi: staticsGenesisVaultAbi, name: "tokenBacking" })).toBeDefined();
+    const vaultAccounting = getAbiItem({ abi: staticsGenesisVaultAbi, name: "vaultAccounting" });
+    expect(vaultAccounting).toMatchObject({
+      outputs: [{
+        components: expect.arrayContaining([
+          { name: "grossBacking", type: "uint256" },
+          { name: "outstandingGenesisCredit", type: "uint256" },
+        ]),
+      }],
+    });
+    expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "vestingComplete" })).toBeDefined();
+    expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "GenesisReleased" })).toBeDefined();
+    expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "StaticsSurplusSwept" })).toBeDefined();
+  });
+
+  it("builds permissionless treasury releases and recipient recovery", () => {
+    expect(decodeFunctionData({
+      abi: staticsTreasuryVestingAbi,
+      data: buildReleaseTreasuryStaticsCall(),
+    })).toEqual({ functionName: "releaseStatics", args: undefined });
+    expect(decodeFunctionData({
+      abi: staticsTreasuryVestingAbi,
+      data: buildSweepTreasuryStaticsSurplusCall(),
+    })).toEqual({ functionName: "sweepStaticsSurplus", args: undefined });
+    expect(decodeFunctionData({
+      abi: staticsTreasuryVestingAbi,
+      data: buildReleaseTreasuryGenesisCall(75n),
+    })).toEqual({ functionName: "releaseGenesis", args: [75n] });
+    expect(decodeFunctionData({
+      abi: staticsTreasuryVestingAbi,
+      data: buildSetTreasuryWithdrawalRecipientCall(receiver),
+    })).toEqual({ functionName: "setWithdrawalRecipient", args: [receiver] });
+    expect(() => buildReleaseTreasuryGenesisCall(0n)).toThrow("must be positive");
+  });
+
   it("builds activation, registration, accrual, and launch claim calls", () => {
     expect(decodeFunctionData({ abi: genesisActivationRegistryAbi, data: buildActivateGenesisCall(42n, 3) })).toEqual({
       functionName: "activate",
@@ -302,6 +365,14 @@ describe("standalone Statics Genesis", () => {
       abi: genesisLaunchDistributorAbi,
       data: buildClaimOwnerGenesisLaunchRewardsCall(assetA, receiver),
     })).toEqual({ functionName: "claimOwnerRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimAllGenesisLaunchRewardsCall([41n, 42n], receiver),
+    })).toEqual({ functionName: "claimAllGenesisRewards", args: [[41n, 42n], receiver] });
+    expect(decodeFunctionData({
+      abi: genesisLaunchDistributorAbi,
+      data: buildClaimAllGenesisLaunchTreasuryRewardsCall(receiver),
+    })).toEqual({ functionName: "claimAllGenesisTreasuryRewards", args: [receiver] });
   });
 
   it("sums sequential activation costs", () => {
@@ -1502,6 +1573,10 @@ describe("Statics unified calldata", () => {
       .toEqual({ functionName: "claimGenesisOwnerRewards", args: [assetA, receiver] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimGenesisTreasuryRewardsCall(assetA, receiver) }))
       .toEqual({ functionName: "claimGenesisTreasuryRewards", args: [assetA, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimAllGenesisRewardsCall([8n, 9n], receiver) }))
+      .toEqual({ functionName: "claimAllGenesisRewards", args: [[8n, 9n], receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimAllGenesisTreasuryRewardsCall(receiver) }))
+      .toEqual({ functionName: "claimAllGenesisTreasuryRewards", args: [receiver] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildSetGenesisRewardShareBpsCall(5_000) }))
       .toEqual({ functionName: "setGenesisRewardShareBps", args: [5_000] });
     expect(() => buildSetGenesisRewardShareBpsCall(10_001)).toThrow("0 through 10000 BPS");
