@@ -177,7 +177,6 @@ export const staticsTreasuryVestingAbi = parseAbi([
   "function LAST_GENESIS_ID() view returns (uint256)",
   "function VESTING_DURATION() view returns (uint256)",
   "function MAX_GENESIS_RELEASE_BATCH() view returns (uint256)",
-  "function MAX_MULTICURVE_RESIDUAL() view returns (uint256)",
   "function statics() view returns (address)",
   "function genesisVault() view returns (address)",
   "function genesis() view returns (address)",
@@ -195,11 +194,13 @@ export const staticsTreasuryVestingAbi = parseAbi([
   "function nextGenesisId() view returns (uint256)",
   "function vestingComplete() view returns (bool)",
   "function releaseStatics() returns (uint256 amount)",
+  "function sweepStaticsSurplus() returns (uint256 amount)",
   "function releaseGenesis(uint256 maxCount) returns (uint256 count)",
   "function setWithdrawalRecipient(address newRecipient)",
-  "event TreasuryVestingBootstrapped(address indexed statics, address indexed genesisVault, address indexed genesis, uint256 vestingStart, uint256 residual)",
+  "event TreasuryVestingBootstrapped(address indexed statics, address indexed genesisVault, address indexed genesis, uint256 vestingStart)",
   "event WithdrawalRecipientUpdated(address indexed previousRecipient, address indexed newRecipient)",
   "event StaticsReleased(address indexed caller, address indexed recipient, uint256 amount, uint256 totalReleased)",
+  "event StaticsSurplusSwept(address indexed recipient, uint256 amount)",
   "event GenesisReleased(address indexed caller, address indexed recipient, uint256 indexed firstGenesisId, uint256 lastGenesisId, uint256 count, uint256 totalReleased)",
 ]);
 
@@ -1999,6 +2000,12 @@ export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex 
 export function buildReleaseTreasuryStaticsCall(): Hex {
   return encodeFunctionData({ abi: staticsTreasuryVestingAbi, functionName: "releaseStatics" });
 }
+/// Builds the recipient-admin-only sweep of treasury STATICS surplus after the full
+/// fixed STATICS principal has been released. The contract always pays its configured recipient.
+export function buildSweepTreasuryStaticsSurplusCall(): Hex {
+  return encodeFunctionData({ abi: staticsTreasuryVestingAbi, functionName: "sweepStaticsSurplus" });
+}
+
 
 /// Builds a permissionless release of currently vested treasury Genesis. Values above the
 /// onchain batch cap are clamped by the vesting contract; zero is rejected before encoding.

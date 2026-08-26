@@ -62,6 +62,7 @@ import {
   buildRedeemGenesisCall,
   buildReleaseTreasuryGenesisCall,
   buildReleaseTreasuryStaticsCall,
+  buildSweepTreasuryStaticsSurplusCall,
   buildRedeemPeggedWithPermitCall,
   buildRecoverCall,
   buildRepayCall,
@@ -320,6 +321,7 @@ describe("standalone Statics Genesis", () => {
     });
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "vestingComplete" })).toBeDefined();
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "GenesisReleased" })).toBeDefined();
+    expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "StaticsSurplusSwept" })).toBeDefined();
   });
 
   it("builds permissionless treasury releases and recipient recovery", () => {
@@ -327,6 +329,10 @@ describe("standalone Statics Genesis", () => {
       abi: staticsTreasuryVestingAbi,
       data: buildReleaseTreasuryStaticsCall(),
     })).toEqual({ functionName: "releaseStatics", args: undefined });
+    expect(decodeFunctionData({
+      abi: staticsTreasuryVestingAbi,
+      data: buildSweepTreasuryStaticsSurplusCall(),
+    })).toEqual({ functionName: "sweepStaticsSurplus", args: undefined });
     expect(decodeFunctionData({
       abi: staticsTreasuryVestingAbi,
       data: buildReleaseTreasuryGenesisCall(75n),
