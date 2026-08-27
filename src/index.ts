@@ -169,9 +169,7 @@ export const staticsGenesisVaultAbi = parseAbi([
 
 export const staticsTreasuryVestingAbi = parseAbi([
   "function STATICS_SUPPLY() view returns (uint256)",
-  "function PROTOCOL_ALLOCATION() view returns (uint256)",
   "function GENESIS_BACKING_COMMITMENT() view returns (uint256)",
-  "function STATICS_VESTING_PRINCIPAL() view returns (uint256)",
   "function GENESIS_VESTING_PRINCIPAL() view returns (uint256)",
   "function FIRST_GENESIS_ID() view returns (uint256)",
   "function LAST_GENESIS_ID() view returns (uint256)",
@@ -185,23 +183,31 @@ export const staticsTreasuryVestingAbi = parseAbi([
   "function bootstrapper() view returns (address)",
   "function vestingStart() view returns (uint256)",
   "function vestingEnd() view returns (uint256)",
-  "function releasedStatics() view returns (uint256)",
   "function releasedGenesis() view returns (uint256)",
-  "function vestedStaticsAt(uint256 timestamp) view returns (uint256)",
   "function vestedGenesisAt(uint256 timestamp) view returns (uint256)",
-  "function releasableStatics() view returns (uint256)",
   "function releasableGenesis() view returns (uint256)",
   "function nextGenesisId() view returns (uint256)",
   "function vestingComplete() view returns (bool)",
-  "function releaseStatics() returns (uint256 amount)",
   "function sweepStaticsSurplus() returns (uint256 amount)",
   "function releaseGenesis(uint256 maxCount) returns (uint256 count)",
   "function setWithdrawalRecipient(address newRecipient)",
   "event TreasuryVestingBootstrapped(address indexed statics, address indexed genesisVault, address indexed genesis, uint256 vestingStart)",
   "event WithdrawalRecipientUpdated(address indexed previousRecipient, address indexed newRecipient)",
-  "event StaticsReleased(address indexed caller, address indexed recipient, uint256 amount, uint256 totalReleased)",
   "event StaticsSurplusSwept(address indexed recipient, uint256 amount)",
   "event GenesisReleased(address indexed caller, address indexed recipient, uint256 indexed firstGenesisId, uint256 lastGenesisId, uint256 count, uint256 totalReleased)",
+]);
+
+export const dopplerERC20V1VestingAbi = parseAbi([
+  "function vestingStart() view returns (uint256)",
+  "function vestedTotalAmount() view returns (uint256)",
+  "function vestingScheduleCount() view returns (uint256)",
+  "function vestingSchedules(uint256 scheduleId) view returns (uint64 cliff, uint64 duration)",
+  "function vestingOf(address beneficiary, uint256 scheduleId) view returns (uint256 totalAmount, uint256 releasedAmount)",
+  "function totalAllocatedOf(address beneficiary) view returns (uint256)",
+  "function getScheduleIdsOf(address beneficiary) view returns (uint256[] scheduleIds)",
+  "function computeAvailableVestedAmount(address beneficiary, uint256 scheduleId) view returns (uint256)",
+  "function releaseFor(address beneficiary, uint256 scheduleId, uint256 amount)",
+  "event TokensReleased(address indexed beneficiary, uint256 indexed scheduleId, uint256 amount)",
 ]);
 
 export const genesisActivationRegistryAbi = parseAbi([
@@ -1995,13 +2001,16 @@ export function buildRedeemGenesisCall(tokenId: bigint, receiver: Address): Hex 
   });
 }
 
-/// Builds a permissionless release of all currently vested treasury STATICS.
-/// The vesting contract always sends the assets to its configured withdrawal recipient.
-export function buildReleaseTreasuryStaticsCall(): Hex {
-  return encodeFunctionData({ abi: staticsTreasuryVestingAbi, functionName: "releaseStatics" });
+/// Builds a permissionless Doppler-native release of all currently vested treasury STATICS.
+/// The token contract always sends the assets directly to the committed beneficiary.
+export function buildReleaseTreasuryStaticsCall(beneficiary: Address): Hex {
+  return encodeFunctionData({
+    abi: dopplerERC20V1VestingAbi,
+    functionName: "releaseFor",
+    args: [beneficiary, 0n, 0n],
+  });
 }
-/// Builds the recipient-admin-only sweep of treasury STATICS surplus after the full
-/// fixed STATICS principal has been released. The contract always pays its configured recipient.
+/// Builds the recipient-admin-only recovery of STATICS retained by the bootstrap contract.
 export function buildSweepTreasuryStaticsSurplusCall(): Hex {
   return encodeFunctionData({ abi: staticsTreasuryVestingAbi, functionName: "sweepStaticsSurplus" });
 }
