@@ -108,6 +108,7 @@ import {
   decodePositionInfo,
   cumulativeGenesisActivationCost,
   DOPPLER_OWNER_FEE_SHARE,
+  dopplerERC20V1VestingAbi,
   DOPPLER_GENESIS_FIXTURE,
   effectiveCanonicalFees,
   encodeSqrtPriceBPerAX96,
@@ -322,13 +323,14 @@ describe("standalone Statics Genesis", () => {
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "vestingComplete" })).toBeDefined();
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "GenesisReleased" })).toBeDefined();
     expect(getAbiItem({ abi: staticsTreasuryVestingAbi, name: "StaticsSurplusSwept" })).toBeDefined();
+    expect(getAbiItem({ abi: dopplerERC20V1VestingAbi, name: "releaseFor" })).toBeDefined();
   });
 
   it("builds permissionless treasury releases and recipient recovery", () => {
     expect(decodeFunctionData({
-      abi: staticsTreasuryVestingAbi,
-      data: buildReleaseTreasuryStaticsCall(),
-    })).toEqual({ functionName: "releaseStatics", args: undefined });
+      abi: dopplerERC20V1VestingAbi,
+      data: buildReleaseTreasuryStaticsCall(receiver),
+    })).toEqual({ functionName: "releaseFor", args: [receiver, 0n, 0n] });
     expect(decodeFunctionData({
       abi: staticsTreasuryVestingAbi,
       data: buildSweepTreasuryStaticsSurplusCall(),
