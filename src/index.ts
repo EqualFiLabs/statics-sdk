@@ -1632,11 +1632,15 @@ export const permit2AllowanceAbi = parseAbi([
 export const staticsTestnetFaucetAbi = parseAbi([
   "function ASSET_COUNT() view returns (uint256)",
   "function COOLDOWN() view returns (uint256)",
+  "function USDG_AMOUNT() view returns (uint256)",
+  "function USDSTX_AMOUNT() view returns (uint256)",
+  "function STATICS_AMOUNT() view returns (uint256)",
+  "function STOCK_AMOUNT() view returns (uint256)",
   "function asset(uint256 index) view returns (address token,uint256 amount)",
   "function lastClaimAt(address account) view returns (uint64)",
   "function nextClaimAt(address account) view returns (uint256)",
   "function claim()",
-  "event Claimed(address indexed account,uint64 claimedAt,address[5] assets,uint256[5] amounts)",
+  "event Claimed(address indexed account,uint64 claimedAt,address[6] assets,uint256[6] amounts)",
 ]);
 
 export type StaticsLiquidityEventName =
