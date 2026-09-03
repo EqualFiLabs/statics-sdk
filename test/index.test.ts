@@ -77,6 +77,15 @@ import {
   buildDistributePartnerRevenueCall,
   buildLinkGenesisCall,
   buildUnlinkGenesisCall,
+  buildBorrowMorphoUsdCall,
+  buildClaimMorphoSyncBountiesCall,
+  buildDeployMorphoCollateralCall,
+  buildMorphoSupplyCall,
+  buildMorphoWithdrawCall,
+  buildRecallMorphoCollateralCall,
+  buildRepayMorphoUsdCall,
+  buildSyncMorphoCall,
+  buildWithdrawUntrackedMorphoCollateralCall,
   buildSetCanonicalPoolFeeConfigurationCall,
   buildQuotePoolCall,
   buildCreatePoolTransaction,
@@ -117,6 +126,9 @@ import {
   getDopplerGenesisModules,
   pendingLpFees,
   maximumLiquidityForAmounts,
+  morphoBlueAbi,
+  morphoBorrowAssets,
+  morphoSupplyAssets,
   planMintUnderlyingRoutes,
   positionSalt,
   LOAN_RECOVERY_GRACE_PERIOD,
@@ -144,6 +156,7 @@ import {
   quoteExtension,
   quoteHookFee,
   quoteMint,
+  quoteMorphoHealth,
   quoteRangeAmounts,
   quoteRedeem,
   robinhoodChain,
@@ -1594,6 +1607,59 @@ describe("Statics unified calldata", () => {
       .toBe("GenesisLinkMismatch");
     expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoRevenue", args: [receiver, assetA] }) }).errorName)
       .toBe("NoRevenue");
+  });
+
+  it("encodes PNFT Morpho borrower and direct lender actions", () => {
+    const marketId = `0x${"11".repeat(32)}` as const;
+    const params = { loanToken: assetA, collateralToken: basketToken, oracle: assetB, irm: receiver, lltv: 770_000_000_000_000_000n };
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildDeployMorphoCollateralCall(7n, marketId, 10n) }))
+      .toEqual({ functionName: "deployMorphoCollateral", args: [7n, marketId, 10n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRecallMorphoCollateralCall(7n, marketId, 4n) }))
+      .toEqual({ functionName: "recallMorphoCollateral", args: [7n, marketId, 4n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildWithdrawUntrackedMorphoCollateralCall(7n, marketId, 2n, receiver) }))
+      .toEqual({ functionName: "withdrawUntrackedMorphoCollateral", args: [7n, marketId, 2n, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildBorrowMorphoUsdCall(7n, marketId, 5n, 6n, receiver) }))
+      .toEqual({ functionName: "borrowMorphoUsd", args: [7n, marketId, 5n, 6n, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRepayMorphoUsdCall(7n, marketId, 0n, 6n, 7n) }))
+      .toEqual({ functionName: "repayMorphoUsd", args: [7n, marketId, 0n, 6n, 7n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSyncMorphoCall(7n, marketId) }))
+      .toEqual({ functionName: "syncMorpho", args: [7n, marketId] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimMorphoSyncBountiesCall([assetA], receiver) }))
+      .toEqual({ functionName: "claimMorphoSyncBounties", args: [[assetA], receiver] });
+    expect(decodeFunctionData({ abi: morphoBlueAbi, data: buildMorphoSupplyCall(params, 100n, 0n, receiver) }))
+      .toEqual({ functionName: "supply", args: [params, 100n, 0n, receiver, "0x"] });
+    expect(decodeFunctionData({ abi: morphoBlueAbi, data: buildMorphoWithdrawCall(params, 0n, 90n, receiver, receiver) }))
+      .toEqual({ functionName: "withdraw", args: [params, 0n, 90n, receiver, receiver] });
+    expect(() => buildRepayMorphoUsdCall(7n, marketId, 1n, 1n, 1n)).toThrow("repay assets or shares");
+    expect(() => buildMorphoSupplyCall(params, 0n, 0n, receiver)).toThrow("supply assets or shares");
+  });
+
+  it("quotes Morpho balances and health with conservative rounding", () => {
+    const market = {
+      totalSupplyAssets: 1_000n,
+      totalSupplyShares: 1_000_000_000n,
+      totalBorrowAssets: 401n,
+      totalBorrowShares: 400n,
+      lastUpdate: 1n,
+      fee: 0n,
+    };
+    const position = { supplyShares: 100_000_000n, borrowShares: 100n, collateral: 500n };
+    expect(morphoSupplyAssets(position, market)).toBe(100n);
+    expect(morphoBorrowAssets(position, market)).toBe(101n);
+    expect(quoteMorphoHealth({
+      position,
+      market,
+      oraclePrice: 10n ** 36n,
+      lltv: 770_000_000_000_000_000n,
+    })).toEqual({
+      suppliedAssets: 100n,
+      borrowedAssets: 101n,
+      availableLiquidity: 599n,
+      utilizationWad: 401_000_000_000_000_000n,
+      maximumBorrowAssets: 385n,
+      borrowHeadroomAssets: 284n,
+      healthFactorWad: 3_811_881_188_118_811_881n,
+    });
   });
 
   it("encodes canonical LP custody, activation, increase, claim, and exit calls", () => {
