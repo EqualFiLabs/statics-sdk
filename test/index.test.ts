@@ -1778,11 +1778,11 @@ describe("Statics unified calldata", () => {
       totalSupplyAssets: 1_000n,
       totalSupplyShares: 1_000_000_000n,
       totalBorrowAssets: 401n,
-      totalBorrowShares: 400n,
+      totalBorrowShares: 400_000_000n,
       lastUpdate: 1n,
       fee: 0n,
     };
-    const position = { supplyShares: 100_000_000n, borrowShares: 100n, collateral: 500n };
+    const position = { supplyShares: 100_000_000n, borrowShares: 100_000_000n, collateral: 500n };
     expect(morphoSupplyAssets(position, market)).toBe(100n);
     expect(morphoBorrowAssets(position, market)).toBe(101n);
     expect(() => morphoBorrowAssets(position, { ...market, totalBorrowAssets: 0n }))
@@ -1791,6 +1791,25 @@ describe("Statics unified calldata", () => {
       .toThrow("borrow totals must be positive when borrow shares are nonzero");
     expect(morphoBorrowAssets({ borrowShares: 0n }, { ...market, totalBorrowAssets: 0n, totalBorrowShares: 0n }))
       .toBe(0n);
+    const youngMarket = {
+      ...market,
+      totalSupplyAssets: 10n,
+      totalSupplyShares: 10_000_000n,
+      totalBorrowAssets: 3n,
+      totalBorrowShares: 1_000_000n,
+    };
+    const youngPosition = { supplyShares: 0n, borrowShares: 1_000_000n, collateral: 10n };
+    expect(morphoBorrowAssets(youngPosition, youngMarket)).toBe(2n);
+    expect(quoteMorphoHealth({
+      position: youngPosition,
+      market: youngMarket,
+      oraclePrice: 10n ** 36n,
+      lltv: 500_000_000_000_000_000n,
+    })).toMatchObject({
+      borrowedAssets: 2n,
+      borrowHeadroomAssets: 3n,
+      healthFactorWad: 2_500_000_000_000_000_000n,
+    });
     expect(quoteMorphoHealth({
       position,
       market,

@@ -770,7 +770,11 @@ export function morphoBorrowAssets(position: Pick<MorphoPosition, "borrowShares"
   if (market.totalBorrowAssets <= 0n || market.totalBorrowShares <= 0n) {
     throw new Error("Morpho borrow totals must be positive when borrow shares are nonzero");
   }
-  return mulDivUp(position.borrowShares, market.totalBorrowAssets, market.totalBorrowShares);
+  return mulDivUp(
+    position.borrowShares,
+    market.totalBorrowAssets + MORPHO_VIRTUAL_ASSETS,
+    market.totalBorrowShares + MORPHO_VIRTUAL_SHARES,
+  );
 }
 
 export function quoteMorphoHealth(input: {
