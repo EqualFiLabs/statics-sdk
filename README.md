@@ -94,6 +94,16 @@ calldata always includes a `positionId`; transfer of that ERC-721 moves the
 attached staking balance, claim checkpoints, collateral, and loan obligations
 together.
 
+The Morpho bindings distinguish tracked protocol collateral from arbitrary raw
+tokens held at a position's `StaticsMorphoAccount`.
+`buildRecallMorphoCollateralCall` withdraws tracked collateral from Morpho back
+into its original Diamond custody ledger, subject to market health. In contrast,
+`buildRecoverMorphoAccountTokenCall` is a PositionNFT-authorized sweep of a raw
+ERC-20 account balance to a receiver; it accepts a minimum received amount and
+does not recall collateral supplied to Morpho. Position portfolio counts include
+`morphoMarketCount`, and `morphoMarketIdsOfPosition` provides bounded historical
+market enumeration. Read all pages at one block because ordering is not stable.
+
 Read `positionCreationFee()` immediately before any direct or atomic Position
 creation and attach that exact native `value` to the transaction. The payable
 builders encode calldata only; transaction value remains an explicit wallet
@@ -105,11 +115,13 @@ not pay the fee again. Zero means free Position creation.
 SVG identity belongs to the separate 5,555-token Genesis collection, whose
 `tokenURI` reflects its permanent token identity and current activation tier.
 
-Global Statics stake is always withdrawable. A selected reward asset begins
+Global Statics stake has no cooldown, but only the undeployed balance is
+withdrawable: stake used as Morpho collateral must first be recalled, and
+synchronization can record a collateral loss. A selected reward asset begins
 with pending stake and becomes eligible at the next hourly boundary at least
-24 hours later. Mature stake remains eligible when a position is increased;
-only the new amount enters the pending tranche. Read `rewardSelection` for the
-exact timestamp and pending/eligible split. The next fee or position
+24 hours later. A top-up merges with existing pending stake using weighted age;
+mature stake remains eligible. Read `rewardSelection` for the exact timestamp
+and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
 
