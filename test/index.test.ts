@@ -3,10 +3,12 @@ import {
   decodeErrorResult,
   decodeEventLog,
   decodeFunctionData,
+  decodeFunctionResult,
   encodeAbiParameters,
   encodeErrorResult,
   encodeEventTopics,
   encodeFunctionData,
+  encodeFunctionResult,
   getAbiItem,
   hashTypedData,
   keccak256,
@@ -77,6 +79,16 @@ import {
   buildDistributePartnerRevenueCall,
   buildLinkGenesisCall,
   buildUnlinkGenesisCall,
+  buildBorrowMorphoUsdCall,
+  buildClaimMorphoSyncBountiesCall,
+  buildDeployMorphoCollateralCall,
+  buildMorphoSupplyCall,
+  buildMorphoWithdrawCall,
+  buildRecallMorphoCollateralCall,
+  buildRecoverMorphoAccountTokenCall,
+  buildRepayMorphoUsdCall,
+  buildSyncMorphoCall,
+  buildWithdrawUntrackedMorphoCollateralCall,
   buildSetCanonicalPoolFeeConfigurationCall,
   buildQuotePoolCall,
   buildCreatePoolTransaction,
@@ -117,6 +129,9 @@ import {
   getDopplerGenesisModules,
   pendingLpFees,
   maximumLiquidityForAmounts,
+  morphoBlueAbi,
+  morphoBorrowAssets,
+  morphoSupplyAssets,
   planMintUnderlyingRoutes,
   positionSalt,
   LOAN_RECOVERY_GRACE_PERIOD,
@@ -144,6 +159,7 @@ import {
   quoteExtension,
   quoteHookFee,
   quoteMint,
+  quoteMorphoHealth,
   quoteRangeAmounts,
   quoteRedeem,
   robinhoodChain,
@@ -187,6 +203,7 @@ import {
   type BasketSnapshot,
   type Permit2PermitSingle,
   type PermitSignature,
+  type PositionPortfolioCounts,
   type UnderlyingLiquidityAdapter,
 } from "../src/index.js";
 
@@ -1325,6 +1342,7 @@ describe("Statics unified calldata", () => {
       "liquidityPositionIdsOfPosition",
       "globalRewardAssetsOfPosition",
       "riskSeriesIdsOfPosition",
+      "morphoMarketIdsOfPosition",
     ]) {
       expect(
         staticsAbi.some(
@@ -1388,16 +1406,19 @@ describe("Statics unified calldata", () => {
         ),
       ).toBe(true);
     }
-    for (const eventName of [
-      "PositionOwnerIndexSynced",
-      "MetadataUpdate",
-      "BatchMetadataUpdate",
-    ]) {
+    for (const eventName of ["PositionOwnerIndexSynced"]) {
       expect(
         staticsAbi.some(
           (entry) => entry.type === "event" && entry.name === eventName,
         ),
       ).toBe(true);
+    }
+    for (const eventName of ["MetadataUpdate", "BatchMetadataUpdate"]) {
+      expect(
+        staticsAbi.some(
+          (entry) => entry.type === "event" && entry.name === eventName,
+        ),
+      ).toBe(false);
     }
     expect(
       staticsAbi.some(
@@ -1470,6 +1491,41 @@ describe("Statics unified calldata", () => {
       errorName: "ERC20InsufficientAllowance",
       args: [receiver, 5n, 10n],
     });
+  });
+
+  it("decodes the complete six-field position portfolio and Morpho market pages", () => {
+    const counts: PositionPortfolioCounts = {
+      basketCount: 1n,
+      loanCount: 2n,
+      liquidityPositionCount: 3n,
+      globalRewardAssetCount: 4n,
+      riskSeriesCount: 5n,
+      morphoMarketCount: 6n,
+    };
+    for (const abi of [staticsAbi, staticsPositionPortfolioAbi]) {
+      const encoded = encodeFunctionResult({
+        abi,
+        functionName: "positionPortfolioCounts",
+        result: counts,
+      });
+      expect(decodeFunctionResult({
+        abi,
+        functionName: "positionPortfolioCounts",
+        data: encoded,
+      })).toEqual(counts);
+    }
+
+    const marketIds = [`0x${"11".repeat(32)}`, `0x${"22".repeat(32)}`] as const;
+    const encodedPage = encodeFunctionResult({
+      abi: staticsPositionPortfolioAbi,
+      functionName: "morphoMarketIdsOfPosition",
+      result: [marketIds, 2n],
+    });
+    expect(decodeFunctionResult({
+      abi: staticsPositionPortfolioAbi,
+      functionName: "morphoMarketIdsOfPosition",
+      data: encodedPage,
+    })).toEqual([marketIds, 2n]);
   });
 
   it("exposes canonical pools without a post-launch activation lifecycle", () => {
@@ -1594,6 +1650,180 @@ describe("Statics unified calldata", () => {
       .toBe("GenesisLinkMismatch");
     expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoRevenue", args: [receiver, assetA] }) }).errorName)
       .toBe("NoRevenue");
+  });
+
+  it("matches the current Statics Morpho interface surface", () => {
+    const functionNames = [
+      "initializeMorphoIntegration",
+      "registerMorphoMarket",
+      "setMorphoMarketMode",
+      "setMorphoSyncBountyBps",
+      "setMorphoPerformanceFeeConfig",
+      "deployMorphoCollateral",
+      "recallMorphoCollateral",
+      "withdrawUntrackedMorphoCollateral",
+      "borrowMorphoUsd",
+      "repayMorphoUsd",
+      "syncMorpho",
+      "syncMorphoForModule",
+      "liquidateMorphoAndSync",
+      "claimMorphoSyncBounties",
+      "recoverMorphoAccountToken",
+      "routeMorphoPerformanceFee",
+      "quoteMorphoPerformanceFee",
+      "morpho",
+      "morphoUsdStx",
+      "morphoAccount",
+      "morphoMarket",
+      "morphoPositionMarket",
+      "morphoMarketIdsOfPosition",
+      "enforceMorphoAccountEmpty",
+      "morphoSyncBountyBps",
+      "morphoSyncBounty",
+      "morphoPerformanceFeeConfig",
+    ];
+    const eventNames = [
+      "MorphoIntegrationInitialized",
+      "MorphoMarketRegistered",
+      "MorphoMarketModeChanged",
+      "MorphoAccountDeployed",
+      "MorphoAccountTokenRecovered",
+      "MorphoCollateralDeployed",
+      "MorphoCollateralRecalled",
+      "MorphoSurplusWithdrawn",
+      "MorphoBorrowed",
+      "MorphoRepaid",
+      "MorphoSynchronized",
+      "MorphoLiquidatedAndSynchronized",
+      "MorphoSyncBountyUpdated",
+      "MorphoSyncBountyClaimed",
+      "MorphoPerformanceFeeConfigured",
+      "MorphoPerformanceFeeRouted",
+    ];
+    for (const name of functionNames) {
+      expect(staticsAbi.some((entry) => entry.type === "function" && entry.name === name), name).toBe(true);
+    }
+    for (const name of eventNames) {
+      expect(staticsAbi.some((entry) => entry.type === "event" && entry.name === name), name).toBe(true);
+    }
+  });
+
+  it("encodes PNFT Morpho borrower and direct lender actions", () => {
+    const marketId = `0x${"11".repeat(32)}` as const;
+    const params = { loanToken: assetA, collateralToken: basketToken, oracle: assetB, irm: receiver, lltv: 770_000_000_000_000_000n };
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildDeployMorphoCollateralCall(7n, marketId, 10n) }))
+      .toEqual({ functionName: "deployMorphoCollateral", args: [7n, marketId, 10n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRecallMorphoCollateralCall(7n, marketId, 4n) }))
+      .toEqual({ functionName: "recallMorphoCollateral", args: [7n, marketId, 4n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildWithdrawUntrackedMorphoCollateralCall(7n, marketId, 2n, receiver) }))
+      .toEqual({ functionName: "withdrawUntrackedMorphoCollateral", args: [7n, marketId, 2n, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildBorrowMorphoUsdCall(7n, marketId, 5n, 6n, receiver) }))
+      .toEqual({ functionName: "borrowMorphoUsd", args: [7n, marketId, 5n, 6n, receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRepayMorphoUsdCall(7n, marketId, 0n, 6n, 7n) }))
+      .toEqual({ functionName: "repayMorphoUsd", args: [7n, marketId, 0n, 6n, 7n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSyncMorphoCall(7n, marketId) }))
+      .toEqual({ functionName: "syncMorpho", args: [7n, marketId] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimMorphoSyncBountiesCall([assetA], receiver) }))
+      .toEqual({ functionName: "claimMorphoSyncBounties", args: [[assetA], receiver] });
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildRecoverMorphoAccountTokenCall(7n, sourceToken, 8n, receiver, 7n),
+    })).toEqual({
+      functionName: "recoverMorphoAccountToken",
+      args: [7n, sourceToken, 8n, receiver, 7n],
+    });
+    const encodedRecoveryResult = encodeFunctionResult({
+      abi: staticsAbi,
+      functionName: "recoverMorphoAccountToken",
+      result: 7n,
+    });
+    expect(decodeFunctionResult({
+      abi: staticsAbi,
+      functionName: "recoverMorphoAccountToken",
+      data: encodedRecoveryResult,
+    })).toBe(7n);
+    expect(() => buildRecoverMorphoAccountTokenCall(7n, sourceToken, 8n, receiver, 0n)).not.toThrow();
+    const recovered = encodeEventArgs("MorphoAccountTokenRecovered", {
+      positionId: 7n,
+      token: sourceToken,
+      receiver,
+      amount: 8n,
+      received: 7n,
+    });
+    expect(recovered.args).toMatchObject({
+      positionId: 7n,
+      token: sourceToken,
+      receiver,
+      amount: 8n,
+      received: 7n,
+    });
+    expect(decodeFunctionData({ abi: morphoBlueAbi, data: buildMorphoSupplyCall(params, 100n, 0n, receiver) }))
+      .toEqual({ functionName: "supply", args: [params, 100n, 0n, receiver, "0x"] });
+    expect(decodeFunctionData({ abi: morphoBlueAbi, data: buildMorphoWithdrawCall(params, 0n, 90n, receiver, receiver) }))
+      .toEqual({ functionName: "withdraw", args: [params, 0n, 90n, receiver, receiver] });
+    expect(() => buildRepayMorphoUsdCall(7n, marketId, 1n, 1n, 1n)).toThrow("repay assets or shares");
+    expect(() => buildRepayMorphoUsdCall(7n, marketId, -1n, 0n, 1n)).toThrow("cannot be negative");
+    expect(() => buildRepayMorphoUsdCall(7n, marketId, 0n, -1n, 1n)).toThrow("cannot be negative");
+    expect(() => buildRecoverMorphoAccountTokenCall(7n, sourceToken, 0n, receiver, 0n))
+      .toThrow("recovery amount must be positive");
+    expect(() => buildRecoverMorphoAccountTokenCall(7n, sourceToken, 1n, receiver, -1n))
+      .toThrow("recovery minimum cannot be negative");
+    expect(() => buildMorphoSupplyCall(params, 0n, 0n, receiver)).toThrow("supply assets or shares");
+    expect(() => buildMorphoWithdrawCall(params, 0n, 0n, receiver, receiver))
+      .toThrow("withdraw assets or shares");
+  });
+
+  it("quotes Morpho balances and health with conservative rounding", () => {
+    const market = {
+      totalSupplyAssets: 1_000n,
+      totalSupplyShares: 1_000_000_000n,
+      totalBorrowAssets: 401n,
+      totalBorrowShares: 400_000_000n,
+      lastUpdate: 1n,
+      fee: 0n,
+    };
+    const position = { supplyShares: 100_000_000n, borrowShares: 100_000_000n, collateral: 500n };
+    expect(morphoSupplyAssets(position, market)).toBe(100n);
+    expect(morphoBorrowAssets(position, market)).toBe(101n);
+    expect(() => morphoBorrowAssets(position, { ...market, totalBorrowAssets: 0n }))
+      .toThrow("borrow totals must be positive when borrow shares are nonzero");
+    expect(() => morphoBorrowAssets(position, { ...market, totalBorrowShares: 0n }))
+      .toThrow("borrow totals must be positive when borrow shares are nonzero");
+    expect(morphoBorrowAssets({ borrowShares: 0n }, { ...market, totalBorrowAssets: 0n, totalBorrowShares: 0n }))
+      .toBe(0n);
+    const youngMarket = {
+      ...market,
+      totalSupplyAssets: 10n,
+      totalSupplyShares: 10_000_000n,
+      totalBorrowAssets: 3n,
+      totalBorrowShares: 1_000_000n,
+    };
+    const youngPosition = { supplyShares: 0n, borrowShares: 1_000_000n, collateral: 10n };
+    expect(morphoBorrowAssets(youngPosition, youngMarket)).toBe(2n);
+    expect(quoteMorphoHealth({
+      position: youngPosition,
+      market: youngMarket,
+      oraclePrice: 10n ** 36n,
+      lltv: 500_000_000_000_000_000n,
+    })).toMatchObject({
+      borrowedAssets: 2n,
+      borrowHeadroomAssets: 3n,
+      healthFactorWad: 2_500_000_000_000_000_000n,
+    });
+    expect(quoteMorphoHealth({
+      position,
+      market,
+      oraclePrice: 10n ** 36n,
+      lltv: 770_000_000_000_000_000n,
+    })).toEqual({
+      suppliedAssets: 100n,
+      borrowedAssets: 101n,
+      availableLiquidity: 599n,
+      utilizationWad: 401_000_000_000_000_000n,
+      maximumBorrowAssets: 385n,
+      borrowHeadroomAssets: 284n,
+      healthFactorWad: 3_811_881_188_118_811_881n,
+    });
   });
 
   it("encodes canonical LP custody, activation, increase, claim, and exit calls", () => {

@@ -23,6 +23,10 @@ export const Q96 = 1n << 96n;
 export const Q128 = 1n << 128n;
 export const Q192 = 1n << 192n;
 export const MAX_UINT256 = (1n << 256n) - 1n;
+export const MORPHO_ORACLE_PRICE_SCALE = 10n ** 36n;
+export const MORPHO_LLTV_SCALE = 10n ** 18n;
+export const MORPHO_VIRTUAL_ASSETS = 1n;
+export const MORPHO_VIRTUAL_SHARES = 1_000_000n;
 export const MIN_TICK = -887_272;
 export const MAX_TICK = 887_272;
 export const STATICS_MAX_SUPPLY = 1_000_000_000n * 10n ** 18n;
@@ -56,6 +60,67 @@ export type DopplerGenesisCurve = {
   shareWad: bigint;
   staticsAmount: bigint;
 };
+
+export type MorphoMarketParams = {
+  loanToken: Address;
+  collateralToken: Address;
+  oracle: Address;
+  irm: Address;
+  lltv: bigint;
+};
+
+export type MorphoMarket = {
+  totalSupplyAssets: bigint;
+  totalSupplyShares: bigint;
+  totalBorrowAssets: bigint;
+  totalBorrowShares: bigint;
+  lastUpdate: bigint;
+  fee: bigint;
+};
+
+export type MorphoPosition = {
+  supplyShares: bigint;
+  borrowShares: bigint;
+  collateral: bigint;
+};
+
+export type StaticsMorphoMarket = {
+  params: MorphoMarketParams;
+  kind: number;
+  mode: number;
+  basketId: bigint;
+};
+
+export type StaticsMorphoPosition = {
+  trackedCollateral: bigint;
+  actualCollateral: bigint;
+  untrackedSurplus: bigint;
+  borrowShares: bigint;
+  debtActive: boolean;
+};
+
+export type MorphoHealth = {
+  suppliedAssets: bigint;
+  borrowedAssets: bigint;
+  availableLiquidity: bigint;
+  utilizationWad: bigint;
+  maximumBorrowAssets: bigint;
+  borrowHeadroomAssets: bigint;
+  healthFactorWad: bigint | null;
+};
+
+export const morphoBlueAbi = parseAbi([
+  "function supply((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) marketParams,uint256 assets,uint256 shares,address onBehalf,bytes data) returns (uint256 assetsSupplied,uint256 sharesSupplied)",
+  "function withdraw((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) marketParams,uint256 assets,uint256 shares,address onBehalf,address receiver) returns (uint256 assetsWithdrawn,uint256 sharesWithdrawn)",
+  "function position(bytes32 id,address user) view returns ((uint256 supplyShares,uint128 borrowShares,uint128 collateral) position)",
+  "function market(bytes32 id) view returns ((uint128 totalSupplyAssets,uint128 totalSupplyShares,uint128 totalBorrowAssets,uint128 totalBorrowShares,uint128 lastUpdate,uint128 fee) market)",
+  "function idToMarketParams(bytes32 id) view returns ((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) marketParams)",
+  "event Supply(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets,uint256 shares)",
+  "event Withdraw(bytes32 indexed id,address indexed caller,address indexed onBehalf,address receiver,uint256 assets,uint256 shares)",
+  "event Borrow(bytes32 indexed id,address caller,address indexed onBehalf,address indexed receiver,uint256 assets,uint256 shares)",
+  "event Repay(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets,uint256 shares)",
+  "event Liquidate(bytes32 indexed id,address indexed caller,address indexed borrower,uint256 repaidAssets,uint256 repaidShares,uint256 seizedAssets,uint256 badDebtAssets,uint256 badDebtShares)",
+]);
 
 export const DOPPLER_GENESIS_FIXTURE = {
   productionApproved: false,
@@ -606,6 +671,7 @@ export type PositionPortfolioCounts = {
   liquidityPositionCount: bigint;
   globalRewardAssetCount: bigint;
   riskSeriesCount: bigint;
+  morphoMarketCount: bigint;
 };
 
 export type RecoveryQuote = {
@@ -689,6 +755,59 @@ export function mulDivUp(value: bigint, multiplier: bigint, denominator: bigint)
   if (denominator === 0n) throw new Error("division by zero");
   const product = value * multiplier;
   return product === 0n ? 0n : (product - 1n) / denominator + 1n;
+}
+
+export function morphoSupplyAssets(position: MorphoPosition, market: MorphoMarket): bigint {
+  return mulDivDown(
+    position.supplyShares,
+    market.totalSupplyAssets + MORPHO_VIRTUAL_ASSETS,
+    market.totalSupplyShares + MORPHO_VIRTUAL_SHARES,
+  );
+}
+
+export function morphoBorrowAssets(position: Pick<MorphoPosition, "borrowShares">, market: MorphoMarket): bigint {
+  if (position.borrowShares === 0n) return 0n;
+  if (market.totalBorrowAssets <= 0n || market.totalBorrowShares <= 0n) {
+    throw new Error("Morpho borrow totals must be positive when borrow shares are nonzero");
+  }
+  return mulDivUp(
+    position.borrowShares,
+    market.totalBorrowAssets + MORPHO_VIRTUAL_ASSETS,
+    market.totalBorrowShares + MORPHO_VIRTUAL_SHARES,
+  );
+}
+
+export function quoteMorphoHealth(input: {
+  position: MorphoPosition;
+  market: MorphoMarket;
+  oraclePrice: bigint;
+  lltv: bigint;
+}): MorphoHealth {
+  if (input.oraclePrice < 0n) throw new Error("Morpho oracle price cannot be negative");
+  if (input.lltv < 0n || input.lltv > MORPHO_LLTV_SCALE) throw new Error("Morpho LLTV is out of range");
+  const suppliedAssets = morphoSupplyAssets(input.position, input.market);
+  const borrowedAssets = morphoBorrowAssets(input.position, input.market);
+  const availableLiquidity = input.market.totalSupplyAssets > input.market.totalBorrowAssets
+    ? input.market.totalSupplyAssets - input.market.totalBorrowAssets
+    : 0n;
+  const utilizationWad = input.market.totalSupplyAssets === 0n
+    ? 0n
+    : mulDivDown(input.market.totalBorrowAssets, MORPHO_LLTV_SCALE, input.market.totalSupplyAssets);
+  const collateralValue = mulDivDown(input.position.collateral, input.oraclePrice, MORPHO_ORACLE_PRICE_SCALE);
+  const maximumBorrowAssets = mulDivDown(collateralValue, input.lltv, MORPHO_LLTV_SCALE);
+  const borrowHeadroomAssets = maximumBorrowAssets > borrowedAssets ? maximumBorrowAssets - borrowedAssets : 0n;
+  const healthFactorWad = borrowedAssets === 0n
+    ? null
+    : mulDivDown(maximumBorrowAssets, MORPHO_LLTV_SCALE, borrowedAssets);
+  return {
+    suppliedAssets,
+    borrowedAssets,
+    availableLiquidity,
+    utilizationWad,
+    maximumBorrowAssets,
+    borrowHeadroomAssets,
+    healthFactorWad,
+  };
 }
 
 function integerSquareRoot(value: bigint): bigint {
@@ -1182,6 +1301,49 @@ export const staticsAbi = parseAbi([
   "function genesisOwnerClaimable(address owner,address asset) view returns (uint256)",
   "function pendingGenesisRecovery() view returns (uint256)",
   "function genesisRewardCustodyAccount() pure returns (bytes32)",
+  "function initializeMorphoIntegration(address morpho,address usdStx,uint16 syncBountyBps)",
+  "function registerMorphoMarket((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) params,uint8 kind,uint256 basketId,uint8 mode) returns (bytes32 marketId)",
+  "function setMorphoMarketMode(bytes32 marketId,uint8 mode)",
+  "function setMorphoSyncBountyBps(uint16 bountyBps)",
+  "function setMorphoPerformanceFeeConfig(address router,uint16 feeBps,uint16 operatorShareBps)",
+  "function deployMorphoCollateral(uint256 positionId,bytes32 marketId,uint256 assets)",
+  "function recallMorphoCollateral(uint256 positionId,bytes32 marketId,uint256 assets)",
+  "function withdrawUntrackedMorphoCollateral(uint256 positionId,bytes32 marketId,uint256 assets,address receiver)",
+  "function borrowMorphoUsd(uint256 positionId,bytes32 marketId,uint256 assets,uint256 maxBorrowShares,address receiver) returns (uint256 assetsBorrowed,uint256 sharesBorrowed)",
+  "function repayMorphoUsd(uint256 positionId,bytes32 marketId,uint256 assets,uint256 shares,uint256 maxAssets) returns (uint256 assetsRepaid,uint256 sharesRepaid)",
+  "function syncMorpho(uint256 positionId,bytes32 marketId) returns (uint256 trackedLoss)",
+  "function syncMorphoForModule(uint256 positionId,address keeper)",
+  "function liquidateMorphoAndSync(uint256 positionId,bytes32 marketId,uint256 seizedAssets,uint256 repaidShares,uint256 maxRepayAssets,uint256 minSeizedAssets,address receiver) returns (uint256 assetsSeized,uint256 assetsRepaid)",
+  "function claimMorphoSyncBounties(address[] assets,address receiver) returns (uint256[] amounts)",
+  "function recoverMorphoAccountToken(uint256 positionId,address token,uint256 amount,address receiver,uint256 minReceived) returns (uint256 received)",
+  "function routeMorphoPerformanceFee(uint256 realizedYield) returns (uint256 feeAmount)",
+  "function quoteMorphoPerformanceFee(uint256 realizedYield) view returns (uint256 feeAmount,uint256 operatorAmount,uint256 treasuryAmount)",
+  "function morpho() view returns (address)",
+  "function morphoUsdStx() view returns (address)",
+  "function morphoAccount(uint256 positionId) view returns (address account,bool deployed)",
+  "function morphoMarket(bytes32 marketId) view returns (((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) params,uint8 kind,uint8 mode,uint256 basketId) config)",
+  "function morphoPositionMarket(uint256 positionId,bytes32 marketId) view returns ((uint256 trackedCollateral,uint256 actualCollateral,uint256 untrackedSurplus,uint256 borrowShares,bool debtActive) position)",
+  "function morphoMarketIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (bytes32[] marketIds,uint256 nextCursor)",
+  "function enforceMorphoAccountEmpty(uint256 positionId) view",
+  "function morphoSyncBountyBps() view returns (uint16)",
+  "function morphoSyncBounty(address keeper,address asset) view returns (uint256)",
+  "function morphoPerformanceFeeConfig() view returns (address router,uint16 feeBps,uint16 operatorShareBps)",
+  "event MorphoIntegrationInitialized(address indexed morpho,address indexed usdStx,uint16 syncBountyBps)",
+  "event MorphoMarketRegistered(bytes32 indexed marketId,address indexed collateralToken,uint8 kind,uint256 basketId,uint8 mode)",
+  "event MorphoMarketModeChanged(bytes32 indexed marketId,uint8 previousMode,uint8 newMode)",
+  "event MorphoAccountDeployed(uint256 indexed positionId,address indexed account)",
+  "event MorphoCollateralDeployed(uint256 indexed positionId,bytes32 indexed marketId,uint256 assets)",
+  "event MorphoCollateralRecalled(uint256 indexed positionId,bytes32 indexed marketId,uint256 assets)",
+  "event MorphoSurplusWithdrawn(uint256 indexed positionId,bytes32 indexed marketId,address indexed receiver,uint256 assets)",
+  "event MorphoBorrowed(uint256 indexed positionId,bytes32 indexed marketId,address indexed receiver,uint256 assets,uint256 shares)",
+  "event MorphoRepaid(uint256 indexed positionId,bytes32 indexed marketId,uint256 assets,uint256 shares)",
+  "event MorphoSynchronized(uint256 indexed positionId,bytes32 indexed marketId,address indexed keeper,uint256 previousTracked,uint256 actualCollateral,uint256 trackedLoss)",
+  "event MorphoLiquidatedAndSynchronized(uint256 indexed positionId,bytes32 indexed marketId,address indexed liquidator,uint256 assetsSeized,uint256 assetsRepaid)",
+  "event MorphoSyncBountyUpdated(uint16 previousBps,uint16 newBps)",
+  "event MorphoSyncBountyClaimed(address indexed keeper,address indexed asset,address indexed receiver,uint256 amount)",
+  "event MorphoAccountTokenRecovered(uint256 indexed positionId,address indexed token,address indexed receiver,uint256 amount,uint256 received)",
+  "event MorphoPerformanceFeeConfigured(address indexed router,uint16 feeBps,uint16 operatorShareBps,address indexed rewardAsset)",
+  "event MorphoPerformanceFeeRouted(address indexed router,uint256 realizedYield,uint256 feeAmount,uint256 operatorAmount,uint256 treasuryAmount)",
   "function creatorRewardCredit(address creator,address asset) view returns (uint256)",
   "function partnerAccrued(address recipient,address asset) view returns (uint256)",
   "function partnerRecipient() view returns (address)",
@@ -1219,7 +1381,7 @@ export const staticsAbi = parseAbi([
   "function positionState(uint256 tokenId) view returns ((bool exists,uint256 stateNonce,uint256 activeLegCount,uint256 unresolvedObligationCount) state)",
   "function isLegActive(uint256 tokenId,bytes32 legKey) view returns (bool)",
   "function isPositionClosable(uint256 tokenId) view returns (bool)",
-  "function positionPortfolioCounts(uint256 positionId) view returns ((uint256 basketCount,uint256 loanCount,uint256 liquidityPositionCount,uint256 globalRewardAssetCount,uint256 riskSeriesCount) counts)",
+  "function positionPortfolioCounts(uint256 positionId) view returns ((uint256 basketCount,uint256 loanCount,uint256 liquidityPositionCount,uint256 globalRewardAssetCount,uint256 riskSeriesCount,uint256 morphoMarketCount) counts)",
   "function basketIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] basketIds,uint256 nextCursor)",
   "function loanIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] loanIds,uint256 nextCursor)",
   "function liquidityPositionIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] tokenIds,uint256 nextCursor)",
@@ -1311,8 +1473,6 @@ export const staticsAbi = parseAbi([
   "event PositionCreationFeeSet(uint256 previousAmount,uint256 newAmount)",
   "event PositionCreationFeePaid(uint256 indexed positionId,address indexed treasury,uint256 amount)",
   "event PositionOwnerIndexSynced(uint256 indexed positionId,address indexed owner)",
-  "event MetadataUpdate(uint256 tokenId)",
-  "event BatchMetadataUpdate(uint256 fromTokenId,uint256 toTokenId)",
   "event PositionLegAttached(uint256 indexed tokenId,bytes32 indexed legKey,address indexed moduleAuthority,bytes32 moduleType,bytes32 localPositionId,uint256 stateNonce)",
   "event PositionLegDetached(uint256 indexed tokenId,bytes32 indexed legKey,uint256 stateNonce)",
   "event PositionStateChanged(uint256 indexed tokenId,uint256 stateNonce,uint256 activeLegCount,uint256 unresolvedObligationCount)",
@@ -1387,12 +1547,13 @@ export const staticsAbi = parseAbi([
 ]);
 
 export const staticsPositionPortfolioAbi = parseAbi([
-  "function positionPortfolioCounts(uint256 positionId) view returns ((uint256 basketCount,uint256 loanCount,uint256 liquidityPositionCount,uint256 globalRewardAssetCount,uint256 riskSeriesCount) counts)",
+  "function positionPortfolioCounts(uint256 positionId) view returns ((uint256 basketCount,uint256 loanCount,uint256 liquidityPositionCount,uint256 globalRewardAssetCount,uint256 riskSeriesCount,uint256 morphoMarketCount) counts)",
   "function basketIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] basketIds,uint256 nextCursor)",
   "function loanIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] loanIds,uint256 nextCursor)",
   "function liquidityPositionIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] tokenIds,uint256 nextCursor)",
   "function globalRewardAssetsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (address[] assets,uint256 nextCursor)",
   "function riskSeriesIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] seriesIds,uint256 nextCursor)",
+  "function morphoMarketIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (bytes32[] marketIds,uint256 nextCursor)",
 ]);
 
 export const staticsPositionPortfolioErrorAbi = parseAbi([
@@ -1497,11 +1658,15 @@ export const permit2AllowanceAbi = parseAbi([
 export const staticsTestnetFaucetAbi = parseAbi([
   "function ASSET_COUNT() view returns (uint256)",
   "function COOLDOWN() view returns (uint256)",
+  "function USDG_AMOUNT() view returns (uint256)",
+  "function USDSTX_AMOUNT() view returns (uint256)",
+  "function STATICS_AMOUNT() view returns (uint256)",
+  "function STOCK_AMOUNT() view returns (uint256)",
   "function asset(uint256 index) view returns (address token,uint256 amount)",
   "function lastClaimAt(address account) view returns (uint64)",
   "function nextClaimAt(address account) view returns (uint256)",
   "function claim()",
-  "event Claimed(address indexed account,uint64 claimedAt,address[5] assets,uint256[5] amounts)",
+  "event Claimed(address indexed account,uint64 claimedAt,address[6] assets,uint256[6] amounts)",
 ]);
 
 export type StaticsLiquidityEventName =
@@ -2610,6 +2775,126 @@ export function buildLinkGenesisCall(positionId: bigint, genesisId: bigint): Hex
 
 export function buildUnlinkGenesisCall(positionId: bigint, genesisId: bigint): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "unlinkGenesis", args: [positionId, genesisId] });
+}
+
+export function buildDeployMorphoCollateralCall(positionId: bigint, marketId: Hex, assets: bigint): Hex {
+  if (assets <= 0n) throw new Error("Morpho collateral amount must be positive");
+  return encodeFunctionData({ abi: staticsAbi, functionName: "deployMorphoCollateral", args: [positionId, marketId, assets] });
+}
+
+export function buildRecallMorphoCollateralCall(positionId: bigint, marketId: Hex, assets: bigint): Hex {
+  if (assets <= 0n) throw new Error("Morpho collateral amount must be positive");
+  return encodeFunctionData({ abi: staticsAbi, functionName: "recallMorphoCollateral", args: [positionId, marketId, assets] });
+}
+
+export function buildWithdrawUntrackedMorphoCollateralCall(
+  positionId: bigint,
+  marketId: Hex,
+  assets: bigint,
+  receiver: Address,
+): Hex {
+  if (assets <= 0n) throw new Error("Morpho surplus amount must be positive");
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "withdrawUntrackedMorphoCollateral",
+    args: [positionId, marketId, assets, receiver],
+  });
+}
+
+export function buildBorrowMorphoUsdCall(
+  positionId: bigint,
+  marketId: Hex,
+  assets: bigint,
+  maxBorrowShares: bigint,
+  receiver: Address,
+): Hex {
+  if (assets <= 0n || maxBorrowShares <= 0n) throw new Error("Morpho borrow bounds must be positive");
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "borrowMorphoUsd",
+    args: [positionId, marketId, assets, maxBorrowShares, receiver],
+  });
+}
+
+export function buildRepayMorphoUsdCall(
+  positionId: bigint,
+  marketId: Hex,
+  assets: bigint,
+  shares: bigint,
+  maxAssets: bigint,
+): Hex {
+  if (assets < 0n || shares < 0n) throw new Error("Morpho repay assets and shares cannot be negative");
+  if ((assets === 0n) === (shares === 0n)) throw new Error("Choose Morpho repay assets or shares");
+  if (maxAssets <= 0n) throw new Error("Morpho maximum repay assets must be positive");
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "repayMorphoUsd",
+    args: [positionId, marketId, assets, shares, maxAssets],
+  });
+}
+
+export function buildSyncMorphoCall(positionId: bigint, marketId: Hex): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "syncMorpho", args: [positionId, marketId] });
+}
+
+export function buildClaimMorphoSyncBountiesCall(assets: readonly Address[], receiver: Address): Hex {
+  if (assets.length === 0) throw new Error("Choose at least one Morpho bounty asset");
+  return encodeFunctionData({ abi: staticsAbi, functionName: "claimMorphoSyncBounties", args: [assets, receiver] });
+}
+
+/**
+ * Builds PositionNFT-authorized recovery of a raw ERC-20 balance held directly
+ * by its StaticsMorphoAccount. This does not recall collateral supplied to Morpho.
+ */
+export function buildRecoverMorphoAccountTokenCall(
+  positionId: bigint,
+  token: Address,
+  amount: bigint,
+  receiver: Address,
+  minReceived: bigint,
+): Hex {
+  if (amount <= 0n) throw new Error("Morpho account recovery amount must be positive");
+  if (minReceived < 0n) throw new Error("Morpho account recovery minimum cannot be negative");
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "recoverMorphoAccountToken",
+    args: [positionId, token, amount, receiver, minReceived],
+  });
+}
+
+function validateMorphoAssetsOrShares(assets: bigint, shares: bigint, action: string): void {
+  if (assets < 0n || shares < 0n || (assets === 0n) === (shares === 0n)) {
+    throw new Error(`Choose Morpho ${action} assets or shares`);
+  }
+}
+
+export function buildMorphoSupplyCall(
+  marketParams: MorphoMarketParams,
+  assets: bigint,
+  shares: bigint,
+  onBehalf: Address,
+): Hex {
+  validateMorphoAssetsOrShares(assets, shares, "supply");
+  return encodeFunctionData({
+    abi: morphoBlueAbi,
+    functionName: "supply",
+    args: [marketParams, assets, shares, onBehalf, "0x"],
+  });
+}
+
+export function buildMorphoWithdrawCall(
+  marketParams: MorphoMarketParams,
+  assets: bigint,
+  shares: bigint,
+  onBehalf: Address,
+  receiver: Address,
+): Hex {
+  validateMorphoAssetsOrShares(assets, shares, "withdraw");
+  return encodeFunctionData({
+    abi: morphoBlueAbi,
+    functionName: "withdraw",
+    args: [marketParams, assets, shares, onBehalf, receiver],
+  });
 }
 
 export function buildDistributePartnerRevenueCall(recipient: Address, asset: Address): Hex {
