@@ -25,7 +25,7 @@ import {
   buildBorrowAndProvideLiquidityCall,
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
-  buildClearCanonicalPoolFeeConfigurationCall,
+  buildClearCanonicalPoolFeeRateCall,
   buildClaimRewardsCall,
   buildClaimBasketRewardsCall,
   buildClaimLiquidityRewardsCall,
@@ -91,7 +91,6 @@ import {
   buildRepayMorphoUsdCall,
   buildSyncMorphoCall,
   buildWithdrawUntrackedMorphoCollateralCall,
-  buildSetCanonicalPoolFeeConfigurationCall,
   buildSetCanonicalPoolFeeRateCall,
   buildQuotePoolCall,
   buildCreatePoolTransaction,
@@ -2016,64 +2015,22 @@ describe("Statics unified calldata", () => {
     })).toThrow("inputFeeBps exceeds uint16");
   });
 
-  it("encodes canonical rate overrides with asserted global allocation", () => {
-    const currentGlobalConfiguration = {
-      inputFeeBps: 25n,
-      outputFeeBps: 25n,
-      polShareBps: 1_000n,
-      liquidityProviderShareBps: 2_500n,
-      basketStakerShareBps: 2_500n,
-      staticsStakerShareBps: 1_500n,
-      treasuryShareBps: 2_000n,
-    };
-    const set = buildSetCanonicalPoolFeeRateCall(
-      7n,
-      assetA,
-      40n,
-      60n,
-      currentGlobalConfiguration,
-    );
+  it("encodes canonical rate overrides independently from allocation", () => {
+    const set = buildSetCanonicalPoolFeeRateCall(7n, assetA, 40n, 60n);
     const decoded = decodeFunctionData({ abi: staticsAbi, data: set });
-    expect(decoded.functionName).toBe("setCanonicalPoolFeeConfiguration");
-    expect(decoded.args).toEqual([7n, assetA, {
-      inputFeeBps: 40,
-      outputFeeBps: 60,
-      polShareBps: 1_000,
-      liquidityProviderShareBps: 2_500,
-      basketStakerShareBps: 2_500,
-      staticsStakerShareBps: 1_500,
-      treasuryShareBps: 2_000,
-    }]);
-    const clear = buildClearCanonicalPoolFeeConfigurationCall(7n, assetA);
+    expect(decoded.functionName).toBe("setCanonicalPoolFeeRate");
+    expect(decoded.args).toEqual([7n, assetA, 40, 60]);
+    const clear = buildClearCanonicalPoolFeeRateCall(7n, assetA);
     expect(decodeFunctionData({ abi: staticsAbi, data: clear }).functionName)
-      .toBe("clearCanonicalPoolFeeConfiguration");
-    expect(staticsAbi.some((item) => item.type === "function" && item.name === "canonicalPoolFeeConfiguration"))
+      .toBe("clearCanonicalPoolFeeRate");
+    expect(staticsAbi.some((item) => item.type === "function" && item.name === "canonicalPoolFeeRate"))
       .toBe(true);
-    expect(staticsAbi.some((item) => item.type === "event" && item.name === "CanonicalPoolFeeConfigurationSet"))
+    expect(staticsAbi.some((item) => item.type === "event" && item.name === "CanonicalPoolFeeRateSet"))
       .toBe(true);
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
       .toBe(true);
-    expect(staticsBasketErrorAbi.some(
-      (item) => item.type === "error" && item.name === "CanonicalPoolFeeAllocationMismatch",
-    )).toBe(true);
-    expect(() => buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
-      inputFeeBps: 40n,
-      outputFeeBps: 60n,
-      polShareBps: 0n,
-      liquidityProviderShareBps: 0n,
-      basketStakerShareBps: 4_000n,
-      staticsStakerShareBps: 4_000n,
-      treasuryShareBps: 1_499n,
-    })).toThrow("pool fee shares must sum to 9500 BPS");
-    expect(() => buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
-      inputFeeBps: 101n,
-      outputFeeBps: 100n,
-      polShareBps: 0n,
-      liquidityProviderShareBps: 0n,
-      basketStakerShareBps: 4_000n,
-      staticsStakerShareBps: 4_000n,
-      treasuryShareBps: 1_500n,
-    })).toThrow("combined pool fee rate exceeds 200 BPS");
+    expect(() => buildSetCanonicalPoolFeeRateCall(7n, assetA, 101n, 100n))
+      .toThrow("combined pool fee rate exceeds 200 BPS");
   });
 
   it("encodes Genesis, checkpoint, creator, and partner actions", () => {

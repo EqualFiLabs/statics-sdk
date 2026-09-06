@@ -236,11 +236,9 @@ the irreversible treasury recovery of a non-basket pool without touching user
 LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Governance
-uses the Diamond for fee configuration. A canonical PoolId stores only its fee
-rate; the legacy combined setter treats all allocation fields as assertions
-against the current global basket allocation. Read `swapFeeConfiguration()` and
-either preserve those five fields with `buildSetCanonicalPoolFeeConfigurationCall`
-or use `buildSetCanonicalPoolFeeRateCall` to replace only the input/output rates.
+uses `buildSetCanonicalPoolFeeRateCall` and `buildClearCanonicalPoolFeeRateCall`
+for PoolId-local rates. Basket fee allocation remains a separate global
+configuration and is never supplied to a canonical-pool rate call.
 Reward and treasury distribution,
 retirement settlement, and post-`ExitOnly` unwind retain their permissionless
 execution paths.

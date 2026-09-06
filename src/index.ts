@@ -1449,9 +1449,9 @@ export const staticsAbi = parseAbi([
   "function installLiquidityManager(address manager)",
   "function setSwapFeeConfiguration((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
   "function swapFeeConfiguration() view returns ((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "function setCanonicalPoolFeeConfiguration(uint256 basketId,address asset,(uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "function clearCanonicalPoolFeeConfiguration(uint256 basketId,address asset)",
-  "function canonicalPoolFeeConfiguration(uint256 basketId,address asset) view returns ((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps,bool overridden) configuration)",
+  "function setCanonicalPoolFeeRate(uint256 basketId,address asset,uint16 inputFeeBps,uint16 outputFeeBps)",
+  "function clearCanonicalPoolFeeRate(uint256 basketId,address asset)",
+  "function canonicalPoolFeeRate(uint256 basketId,address asset) view returns ((uint16 inputFeeBps,uint16 outputFeeBps,bool overridden) rate)",
   "function liquidityManager() view returns (address manager,bool installed)",
   "function unwindBasketLiquidity(uint256 basketId,address asset)",
   "function basketLiquidityUnwound(uint256 basketId,address asset) view returns (bool unwound)",
@@ -1535,8 +1535,8 @@ export const staticsAbi = parseAbi([
   "event LiquidityManagerInstalled(address indexed manager)",
   "event CanonicalPoolSyncedToManager(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,address manager)",
   "event SwapFeeConfigurationChanged((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "event CanonicalPoolFeeConfigurationSet(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
-  "event CanonicalPoolFeeConfigurationCleared(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId)",
+  "event CanonicalPoolFeeRateSet(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint16 inputFeeBps,uint16 outputFeeBps)",
+  "event CanonicalPoolFeeRateCleared(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId)",
   "event PermanentLiquidityTreasuryAccrued(uint256 indexed basketId,address indexed sourcePoolAsset,address indexed rewardAsset,uint256 amount)",
   "event BasketLiquidityUnwound(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint256 constituentReleased,uint256 basketTokensBurned)",
   "event BorrowedLiquidityPositionMinted(uint256 indexed loanId,uint256 indexed basketId,address indexed asset,uint256 v4TokenId,address recipient,uint256 liquidity,uint256 spent0,uint256 spent1,uint256 refund0,uint256 refund1)",
@@ -1719,8 +1719,8 @@ export type StaticsLiquidityEventName =
   | "LiquidityManagerInstalled"
   | "CanonicalPoolSyncedToManager"
   | "SwapFeeConfigurationChanged"
-  | "CanonicalPoolFeeConfigurationSet"
-  | "CanonicalPoolFeeConfigurationCleared"
+  | "CanonicalPoolFeeRateSet"
+  | "CanonicalPoolFeeRateCleared"
   | "PermanentLiquidityTreasuryAccrued"
   | "BasketLiquidityUnwound"
   | "BorrowedLiquidityPositionMinted"
@@ -1845,7 +1845,6 @@ export const staticsBasketErrorAbi = parseAbi([
   "error InvalidPoolLaunchPrice(address asset,uint160 sqrtPriceAssetPerBasketX96)",
   "error InvalidPoolLaunchLiquidity(address asset,uint256 pairedAssetAmount)",
   "error CanonicalPoolAlreadyAssociated(bytes32 poolId,uint256 basketId,address asset)",
-  "error CanonicalPoolFeeAllocationMismatch(bytes32 poolId)",
   "error LaunchInputExceedsMaximum(address asset,uint256 required,uint256 maximum)",
   "error InsufficientLaunchAssetReceived(address asset,uint256 required,uint256 received)",
   "error LaunchDebitExceedsMaximum(address asset,uint256 actualDebit,uint256 maximum)",
@@ -3045,20 +3044,6 @@ function coerceSwapFeeConfiguration(configuration: SwapFeeConfiguration) {
   };
 }
 
-function validatedPoolFeeConfiguration(configuration: SwapFeeConfiguration) {
-  if (configuration.inputFeeBps + configuration.outputFeeBps > 200n) {
-    throw new Error("combined pool fee rate exceeds 200 BPS");
-  }
-  if (
-    configuration.polShareBps + configuration.liquidityProviderShareBps
-      + configuration.basketStakerShareBps + configuration.staticsStakerShareBps
-      + configuration.treasuryShareBps !== CONFIGURABLE_SHARE_BPS
-  ) {
-    throw new Error("pool fee shares must sum to 9500 BPS");
-  }
-  return coerceSwapFeeConfiguration(configuration);
-}
-
 export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfiguration): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
@@ -3067,37 +3052,17 @@ export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfigura
   });
 }
 
-/**
- * Encodes the compatibility configuration selector. The five allocation fields
- * are onchain assertions and must match the active global basket allocation.
- */
-export function buildSetCanonicalPoolFeeConfigurationCall(
-  basketId: bigint,
-  asset: Address,
-  configuration: SwapFeeConfiguration,
-): Hex {
-  return encodeFunctionData({
-    abi: staticsAbi,
-    functionName: "setCanonicalPoolFeeConfiguration",
-    args: [basketId, asset, validatedPoolFeeConfiguration(configuration)],
-  });
-}
-
-/**
- * Builds a canonical PoolId-local rate override while preserving the allocation
- * fields read from swapFeeConfiguration() at the Diamond.
- */
 export function buildSetCanonicalPoolFeeRateCall(
   basketId: bigint,
   asset: Address,
   inputFeeBps: bigint,
   outputFeeBps: bigint,
-  currentGlobalConfiguration: SwapFeeConfiguration,
 ): Hex {
-  return buildSetCanonicalPoolFeeConfigurationCall(basketId, asset, {
-    ...currentGlobalConfiguration,
-    inputFeeBps,
-    outputFeeBps,
+  const feeRate = validatedPoolSwapFeeRate({ inputFeeBps, outputFeeBps });
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "setCanonicalPoolFeeRate",
+    args: [basketId, asset, feeRate.inputFeeBps, feeRate.outputFeeBps],
   });
 }
 
@@ -3467,10 +3432,10 @@ export function buildReplaceLiquidityManagerCall(newManager: Address): Hex {
   });
 }
 
-export function buildClearCanonicalPoolFeeConfigurationCall(basketId: bigint, asset: Address): Hex {
+export function buildClearCanonicalPoolFeeRateCall(basketId: bigint, asset: Address): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
-    functionName: "clearCanonicalPoolFeeConfiguration",
+    functionName: "clearCanonicalPoolFeeRate",
     args: [basketId, asset],
   });
 }
