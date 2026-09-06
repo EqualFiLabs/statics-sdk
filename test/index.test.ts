@@ -958,6 +958,57 @@ describe("Statics unified calldata", () => {
         }),
       }).functionName
     ).toBe("setApprovalForAll");
+
+    const frozenCall = encodeFunctionData({
+      abi: staticsDollarRiskTokenAbi,
+      functionName: "transfersFrozen",
+      args: [7n],
+    });
+    expect(
+      decodeFunctionData({ abi: staticsDollarRiskTokenAbi, data: frozenCall }),
+    ).toEqual({ functionName: "transfersFrozen", args: [7n] });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarRiskTokenAbi,
+        functionName: "transfersFrozen",
+        data: encodeFunctionResult({
+          abi: staticsDollarRiskTokenAbi,
+          functionName: "transfersFrozen",
+          result: true,
+        }),
+      }),
+    ).toBe(true);
+
+    const freezeCall = encodeFunctionData({
+      abi: staticsDollarRiskTokenAbi,
+      functionName: "freezeTransfers",
+      args: [7n],
+    });
+    expect(
+      decodeFunctionData({ abi: staticsDollarRiskTokenAbi, data: freezeCall }),
+    ).toEqual({ functionName: "freezeTransfers", args: [7n] });
+
+    const frozenTopics = encodeEventTopics({
+      abi: staticsDollarRiskTokenAbi,
+      eventName: "SeriesTransfersFrozen",
+      args: { seriesId: 7n },
+    });
+    expect(
+      decodeEventLog({
+        abi: staticsDollarRiskTokenAbi,
+        topics: frozenTopics as [`0x${string}`, ...`0x${string}`[]],
+        data: "0x",
+      }),
+    ).toMatchObject({ eventName: "SeriesTransfersFrozen", args: { seriesId: 7n } });
+
+    const frozenError = encodeErrorResult({
+      abi: staticsDollarRiskTokenAbi,
+      errorName: "FrozenSeriesTransfer",
+      args: [7n],
+    });
+    expect(
+      decodeErrorResult({ abi: staticsDollarRiskTokenAbi, data: frozenError }),
+    ).toMatchObject({ errorName: "FrozenSeriesTransfer", args: [7n] });
   });
 
   it("exports consumption-only Risk Share liquidity calls", () => {
@@ -1015,6 +1066,33 @@ describe("Statics unified calldata", () => {
         (entry) => entry.type === "function" && entry.name === "fundRiskIncentives",
       ),
     ).toBe(false);
+
+    const residueTopics = encodeEventTopics({
+      abi: staticsDollarPeripheryAbi,
+      eventName: "RiskProceedsResidueAssigned",
+      args: { positionId: 7n, seriesId: 1n, epoch: 3n },
+    });
+    const residueData = encodeAbiParameters(
+      parseAbiParameters("uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount"),
+      [11n, 13n, 17n],
+    );
+    expect(
+      decodeEventLog({
+        abi: staticsDollarPeripheryAbi,
+        topics: residueTopics as [`0x${string}`, ...`0x${string}`[]],
+        data: residueData,
+      }),
+    ).toMatchObject({
+      eventName: "RiskProceedsResidueAssigned",
+      args: {
+        positionId: 7n,
+        seriesId: 1n,
+        epoch: 3n,
+        collateralAmount: 11n,
+        staticsDollarAmount: 13n,
+        staticsAmount: 17n,
+      },
+    });
   });
 
   it("encodes typed pegged mint-and-recombine quote and execution calls", () => {

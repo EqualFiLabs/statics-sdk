@@ -136,8 +136,11 @@ Statics Dollar builders cover the typed ETH/WETH deposit and ordinary
 recombination gateway exposed by the same Diamond. Permit variants carry the
 signed EIP-2612 allowance value independently from the operation amount, so
 integrations can authorize an exact input or a reusable allowance in the same
-transaction. Risk Shares still require ERC-1155 operator approval. The
-builders do not expose the Core's managed pairing-only recombination selector.
+transaction. Risk Shares still require ERC-1155 operator approval while their
+series is active or transition-pending. Successful transition finalization
+freezes ordinary transfers for the predecessor series; inspect
+`transfersFrozen(seriesId)` and use Core recovery for that ID. The builders do
+not expose the Core's managed pairing-only recombination selector.
 Pegged USDG minting and USDstx redemption have the same atomic permit path via
 `buildMintPeggedWithPermitCall` and `buildRedeemPeggedWithPermitCall`.
 `buildErc20PermitTypedData` supplies the matching EIP-712 message; integrations

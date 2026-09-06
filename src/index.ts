@@ -1965,10 +1965,14 @@ export const staticsDollarRiskTokenAbi = parseAbi([
   "function balanceOf(address account,uint256 id) view returns (uint256)",
   "function isApprovedForAll(address account,address operator) view returns (bool)",
   "function setApprovalForAll(address operator,bool approved)",
+  "function transfersFrozen(uint256 seriesId) view returns (bool)",
+  "function freezeTransfers(uint256 seriesId)",
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "event ApprovalForAll(address indexed account,address indexed operator,bool approved)",
   "event TransferSingle(address indexed operator,address indexed from,address indexed to,uint256 id,uint256 value)",
+  "event SeriesTransfersFrozen(uint256 indexed seriesId)",
+  "error FrozenSeriesTransfer(uint256 seriesId)",
 ]);
 
 export const wethAbi = parseAbi([
@@ -2039,6 +2043,7 @@ export const staticsDollarPeripheryAbi = parseAbi([
   "event RiskProceedsClaimed(uint256 indexed positionId,uint256 indexed seriesId,address indexed receiver,address collateralToken,address staticsToken,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskProceedsAccrued(uint256 indexed seriesId,uint64 indexed epoch,address indexed token,uint256 amount,bytes32 source)",
   "event RiskProceedsSettled(uint256 indexed positionId,uint256 indexed seriesId,uint256 collateralAdded,uint256 staticsDollarAdded,uint256 staticsAdded,uint256 accruedCollateral,uint256 accruedStaticsDollar,uint256 accruedStatics)",
+  "event RiskProceedsResidueAssigned(uint256 indexed positionId,uint256 indexed seriesId,uint64 indexed epoch,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskIncentivesFunded(uint256 indexed seriesId,address indexed token,address indexed funder,uint256 requestedAmount,uint256 receivedAmount)",
   "event RiskIncentivesReleased(uint256 indexed seriesId,uint64 indexed epoch,uint256 riskSharesConsumed,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskIncentivesRolledOver(uint256 indexed seriesId,uint256 indexed destinationSeriesId,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
