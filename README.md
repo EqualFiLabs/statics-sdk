@@ -99,10 +99,19 @@ tokens held at a position's `StaticsMorphoAccount`.
 `buildRecallMorphoCollateralCall` withdraws tracked collateral from Morpho back
 into its original Diamond custody ledger, subject to market health. In contrast,
 `buildRecoverMorphoAccountTokenCall` is a PositionNFT-authorized sweep of a raw
-ERC-20 account balance to a receiver; it accepts a minimum received amount and
+ERC-20 account balance to a receiver while the NFT exists. Closing a position
+records its final owner as the permanent recovery beneficiary, who retains the
+same sweep authority after the NFT is burned; other callers revert with
+`NotMorphoRecoveryBeneficiary`. The call accepts a minimum received amount and
 does not recall collateral supplied to Morpho. Position portfolio counts include
-`morphoMarketCount`, and `morphoMarketIdsOfPosition` provides bounded historical
-market enumeration. Read all pages at one block because ordering is not stable.
+`morphoMarketCount`, and `morphoMarketIdsOfPosition` provides bounded enumeration
+of the position's current tracked markets. Read all pages at one block because
+entries are removed when empty and ordering is not stable.
+
+Do not supply Morpho loan tokens on behalf of a PositionNFT account. Such
+`supplyShares` are not part of the Statics position enumeration or close check
+and the current Statics interface cannot withdraw them. Native assets and NFTs
+sent to the account are likewise outside the recovery surface.
 
 Read `positionCreationFee()` immediately before any direct or atomic Position
 creation and attach that exact native `value` to the transaction. The payable
@@ -136,11 +145,18 @@ Statics Dollar builders cover the typed ETH/WETH deposit and ordinary
 recombination gateway exposed by the same Diamond. Permit variants carry the
 signed EIP-2612 allowance value independently from the operation amount, so
 integrations can authorize an exact input or a reusable allowance in the same
-transaction. Risk Shares still require ERC-1155 operator approval while their
-series is active or transition-pending. Successful transition finalization
-freezes ordinary transfers for the predecessor series; inspect
-`transfersFrozen(seriesId)` and use Core recovery for that ID. The builders do
-not expose the Core's managed pairing-only recombination selector.
+transaction. Risk Shares still require ERC-1155 operator approval. Successful
+transition finalization freezes ordinary transfers for the predecessor's
+recoverable series; inspect `transfersFrozen(seriesId)`. Gateway builders
+cannot pull that ID, but holders may still call direct Core recombination for
+runoff or Core recovery for rollover. A series retired directly with its
+profile remains transferable and ordinary-recombinable via Core (and the
+gateway for profile 1) during runoff. The builders do not expose the Core's
+managed pairing-only recombination selector.
+`buildDollarCoreRecombineCall`, `buildReturnRiskSharesCall`,
+`buildReclaimReturnedRiskSharesCall`, the returned-risk preview and claim
+builders, and the expired-risk preview and recovery builders encode those
+direct Core paths.
 Pegged USDG minting and USDstx redemption have the same atomic permit path via
 `buildMintPeggedWithPermitCall` and `buildRedeemPeggedWithPermitCall`.
 `buildErc20PermitTypedData` supplies the matching EIP-712 message; integrations
@@ -186,8 +202,11 @@ permanently seeds every canonical pool. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 
-Anyone can permissionlessly create an unrelated protocol pool between any two
-compatible ERC-20s with `buildCreatePoolTransaction`. Assemble the `CreatePoolParams`
+When `poolCreationFee()` is nonzero, anyone can permissionlessly create an
+unrelated protocol pool between any two compatible ERC-20s with
+`buildCreatePoolTransaction` by paying that exact fee. A zero fee disables
+permissionless creation and permits only the Diamond owner to create. Assemble
+the `CreatePoolParams`
 by sorting the pair with `sortPoolCurrencies` and encoding the raw
 token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
 to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
@@ -217,7 +236,12 @@ the irreversible treasury recovery of a non-basket pool without touching user
 LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Governance
-uses the Diamond for fee configuration. Reward and treasury distribution,
+uses the Diamond for fee configuration. A canonical PoolId stores only its fee
+rate; the legacy combined setter treats all allocation fields as assertions
+against the current global basket allocation. Read `swapFeeConfiguration()` and
+either preserve those five fields with `buildSetCanonicalPoolFeeConfigurationCall`
+or use `buildSetCanonicalPoolFeeRateCall` to replace only the input/output rates.
+Reward and treasury distribution,
 retirement settlement, and post-`ExitOnly` unwind retain their permissionless
 execution paths.
 

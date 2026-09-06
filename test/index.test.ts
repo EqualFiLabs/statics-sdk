@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   allowsExposureIncrease,
   BasketStatus,
+  DollarRecoveryClaimMode,
   buildActivateLiquidityPositionCall,
   buildAccrueGenesisLaunchRewardsCall,
   buildAccrueGenesisRewardsCall,
@@ -44,6 +45,7 @@ import {
   buildDonateGenesisReserveTransaction,
   buildDecommissionBasketCall,
   buildDepositETHTransaction,
+  buildDollarCoreRecombineCall,
   buildErc20PermitTypedData,
   buildIncreaseStakedLiquidityCall,
   buildMintPeggedAndRecombineCall,
@@ -90,6 +92,7 @@ import {
   buildSyncMorphoCall,
   buildWithdrawUntrackedMorphoCollateralCall,
   buildSetCanonicalPoolFeeConfigurationCall,
+  buildSetCanonicalPoolFeeRateCall,
   buildQuotePoolCall,
   buildCreatePoolTransaction,
   buildInvalidatePoolCreationNonceCall,
@@ -113,9 +116,15 @@ import {
   buildTestnetFaucetClaimCall,
   buildUnstakeLiquidityPositionCall,
   buildClaimPeggedProtocolRevenueCall,
+  buildClaimReturnedRiskCall,
+  buildPreviewExpiredRiskRecoveryCall,
+  buildPreviewReturnedRiskClaimCall,
+  buildReclaimReturnedRiskSharesCall,
+  buildRecoverExpiredRiskCall,
   buildRecombineToWETHCall,
   buildRecombineToWETHWithPermitCall,
   buildRecombineToETHWithPermitCall,
+  buildReturnRiskSharesCall,
   buildV4ExactInputSingleSwap,
   decodePositionInfo,
   cumulativeGenesisActivationCost,
@@ -179,9 +188,11 @@ import {
   staticsDollarCoreAbi,
   staticsDollarErrorAbi,
   staticsDollarPeripheryAbi,
+  staticsDollarPeripheryErrorAbi,
   staticsDollarRiskTokenAbi,
   staticsDollarTokenAbi,
   staticsLendingErrorAbi,
+  staticsMorphoErrorAbi,
   staticsLiquidityManagerAbi,
   staticsPositionErrorAbi,
   staticsPositionPortfolioAbi,
@@ -948,6 +959,20 @@ describe("Statics unified calldata", () => {
       }).functionName
     ).toBe("approve");
 
+    for (const name of ["coreTokenKind", "pool"]) {
+      expect(staticsDollarTokenAbi.some((entry) => entry.type === "function" && entry.name === name), name)
+        .toBe(true);
+    }
+    const minterError = encodeErrorResult({
+      abi: staticsDollarTokenAbi,
+      errorName: "NotMinter",
+      args: [receiver],
+    });
+    expect(decodeErrorResult({ abi: staticsDollarTokenAbi, data: minterError })).toMatchObject({
+      errorName: "NotMinter",
+      args: [receiver],
+    });
+
     expect(
       decodeFunctionData({
         abi: staticsDollarRiskTokenAbi,
@@ -1009,6 +1034,247 @@ describe("Statics unified calldata", () => {
     expect(
       decodeErrorResult({ abi: staticsDollarRiskTokenAbi, data: frozenError }),
     ).toMatchObject({ errorName: "FrozenSeriesTransfer", args: [7n] });
+
+    for (const name of ["coreTokenKind", "pool"]) {
+      expect(staticsDollarRiskTokenAbi.some((entry) => entry.type === "function" && entry.name === name), name)
+        .toBe(true);
+    }
+    expect(staticsDollarRiskTokenAbi.some((entry) => entry.type === "error" && entry.name === "NotPool"))
+      .toBe(true);
+    expect(staticsDollarCoreAbi.some((entry) => entry.type === "function" && entry.name === "positionNFT"))
+      .toBe(true);
+  });
+
+  it("encodes direct Core runoff and recovery calls", () => {
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildDollarCoreRecombineCall(7n, 100n, 101n, 99n, receiver),
+      }),
+    ).toEqual({
+      functionName: "recombine",
+      args: [7n, 100n, 101n, 99n, receiver],
+    });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildReturnRiskSharesCall(7n, 101n),
+      }),
+    ).toEqual({ functionName: "returnRiskShares", args: [7n, 101n] });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildReclaimReturnedRiskSharesCall(7n, receiver),
+      }),
+    ).toEqual({
+      functionName: "reclaimReturnedRiskShares",
+      args: [7n, receiver],
+    });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildPreviewReturnedRiskClaimCall(
+          receiver,
+          7n,
+          DollarRecoveryClaimMode.NAV,
+        ),
+      }),
+    ).toEqual({
+      functionName: "previewReturnedRiskClaim",
+      args: [receiver, 7n, DollarRecoveryClaimMode.NAV],
+    });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildClaimReturnedRiskCall(
+          7n,
+          DollarRecoveryClaimMode.ExactUnits,
+          11n,
+          12n,
+          13n,
+          receiver,
+        ),
+      }),
+    ).toEqual({
+      functionName: "claimReturnedRisk",
+      args: [
+        7n,
+        DollarRecoveryClaimMode.ExactUnits,
+        11n,
+        12n,
+        13n,
+        receiver,
+      ],
+    });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildPreviewExpiredRiskRecoveryCall(
+          receiver,
+          7n,
+          101n,
+          DollarRecoveryClaimMode.CollateralOnly,
+        ),
+      }),
+    ).toEqual({
+      functionName: "previewExpiredRiskRecovery",
+      args: [receiver, 7n, 101n, DollarRecoveryClaimMode.CollateralOnly],
+    });
+    expect(
+      decodeFunctionData({
+        abi: staticsDollarCoreAbi,
+        data: buildRecoverExpiredRiskCall(
+          receiver,
+          7n,
+          101n,
+          DollarRecoveryClaimMode.CollateralOnly,
+          5n,
+        ),
+      }),
+    ).toEqual({
+      functionName: "recoverExpiredRisk",
+      args: [receiver, 7n, 101n, DollarRecoveryClaimMode.CollateralOnly, 5n],
+    });
+
+    const recombineResult = encodeFunctionResult({
+      abi: staticsDollarCoreAbi,
+      functionName: "recombine",
+      result: [0, 99n],
+    });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarCoreAbi,
+        functionName: "recombine",
+        data: recombineResult,
+      }),
+    ).toEqual([0, 99n]);
+
+    const returnedPreview = {
+      oldSeriesId: 7n,
+      successorSeriesId: 8n,
+      oldShares: 101n,
+      juniorCollateral: 21n,
+      collateralIn: 3n,
+      collateralOut: 4n,
+      successorPairs: 97n,
+    };
+    const returnedPreviewResult = encodeFunctionResult({
+      abi: staticsDollarCoreAbi,
+      functionName: "previewReturnedRiskClaim",
+      result: returnedPreview,
+    });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarCoreAbi,
+        functionName: "previewReturnedRiskClaim",
+        data: returnedPreviewResult,
+      }),
+    ).toEqual(returnedPreview);
+
+    const claimResult = encodeFunctionResult({
+      abi: staticsDollarCoreAbi,
+      functionName: "claimReturnedRisk",
+      result: [97n, 3n, 4n],
+    });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarCoreAbi,
+        functionName: "claimReturnedRisk",
+        data: claimResult,
+      }),
+    ).toEqual([97n, 3n, 4n]);
+
+    const expiredPreview = {
+      oldSeriesId: 7n,
+      successorSeriesId: 8n,
+      sharesBurned: 101n,
+      staticsDollarBurned: 95n,
+      seniorCollateralOut: 12n,
+      juniorCollateral: 21n,
+      keeperBounty: 2n,
+      holderCollateral: 19n,
+      holderPairs: 4n,
+      holderCollateralDust: 1n,
+    };
+    const expiredPreviewResult = encodeFunctionResult({
+      abi: staticsDollarCoreAbi,
+      functionName: "previewExpiredRiskRecovery",
+      result: expiredPreview,
+    });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarCoreAbi,
+        functionName: "previewExpiredRiskRecovery",
+        data: expiredPreviewResult,
+      }),
+    ).toEqual(expiredPreview);
+
+    const recoverResult = encodeFunctionResult({
+      abi: staticsDollarCoreAbi,
+      functionName: "recoverExpiredRisk",
+      result: [95n, 2n, 4n],
+    });
+    expect(
+      decodeFunctionResult({
+        abi: staticsDollarCoreAbi,
+        functionName: "recoverExpiredRisk",
+        data: recoverResult,
+      }),
+    ).toEqual([95n, 2n, 4n]);
+
+    for (const name of [
+      "Recombined",
+      "CollateralExitDeferred",
+      "RiskSharesReturned",
+      "ReturnedRiskSharesReclaimed",
+      "ReturnedRiskClaimed",
+      "ExpiredRiskRecovered",
+      "SeriesClosed",
+    ]) {
+      expect(staticsDollarCoreAbi.some((entry) => entry.type === "event" && entry.name === name), name).toBe(true);
+    }
+    const deferredTopics = encodeEventTopics({
+      abi: staticsDollarCoreAbi,
+      eventName: "CollateralExitDeferred",
+      args: { caller: receiver, receiver: assetA, seriesId: 7n },
+    });
+    const deferredData = encodeAbiParameters(
+      parseAbiParameters("uint8 status,uint256 unhealthyProfileBitmap"),
+      [1, 4n],
+    );
+    expect(decodeEventLog({
+      abi: staticsDollarCoreAbi,
+      topics: deferredTopics as [`0x${string}`, ...`0x${string}`[]],
+      data: deferredData,
+    })).toMatchObject({
+      eventName: "CollateralExitDeferred",
+      args: { caller: receiver, receiver: assetA, seriesId: 7n, status: 1, unhealthyProfileBitmap: 4n },
+    });
+    const closedTopics = encodeEventTopics({
+      abi: staticsDollarCoreAbi,
+      eventName: "SeriesClosed",
+      args: { profileId: 1n, seriesId: 7n },
+    });
+    expect(decodeEventLog({
+      abi: staticsDollarCoreAbi,
+      topics: closedTopics as [`0x${string}`, ...`0x${string}`[]],
+      data: "0x",
+    })).toMatchObject({ eventName: "SeriesClosed", args: { profileId: 1n, seriesId: 7n } });
+    for (const name of [
+      "InvalidShareAmount",
+      "EmptyPool",
+      "SeriesNotPending",
+      "ReturnWindowClosed",
+      "NoReturnedShares",
+      "SeriesNotRecoverable",
+      "SlippageExceeded",
+      "InvalidRecoveryMode",
+      "CollateralExitWorsensHealth",
+      "Unauthorized",
+      "PartialRecoveryNotAllowed",
+    ]) {
+      expect(staticsDollarErrorAbi.some((entry) => entry.type === "error" && entry.name === name), name).toBe(true);
+    }
   });
 
   it("exports consumption-only Risk Share liquidity calls", () => {
@@ -1025,6 +1291,15 @@ describe("Statics unified calldata", () => {
       functionName: "createAndStakeRiskShares",
       args: [1n, 25n, receiver],
     });
+
+    for (const name of ["RiskLiquidityClosed", "RiskLiquidityDustCleared"]) {
+      expect(staticsDollarPeripheryAbi.some((entry) => entry.type === "event" && entry.name === name), name)
+        .toBe(true);
+    }
+    for (const name of ["UnexpectedRiskIngress", "RiskBatchIngressUnsupported"]) {
+      expect(staticsDollarPeripheryErrorAbi.some((entry) => entry.type === "error" && entry.name === name), name)
+        .toBe(true);
+    }
 
     expect(
       decodeFunctionData({
@@ -1091,6 +1366,87 @@ describe("Statics unified calldata", () => {
         collateralAmount: 11n,
         staticsDollarAmount: 13n,
         staticsAmount: 17n,
+      },
+    });
+
+    const transitionTopics = encodeEventTopics({
+      abi: staticsDollarPeripheryAbi,
+      eventName: "SeriesTransitionProcessed",
+      args: { oldSeriesId: 1n, newSeriesId: 2n },
+    });
+    const transitionData = encodeAbiParameters(
+      parseAbiParameters("uint256 oldPrincipal,uint256 newPrincipal,bool returnedDuringWindow"),
+      [23n, 19n, true],
+    );
+    expect(
+      decodeEventLog({
+        abi: staticsDollarPeripheryAbi,
+        topics: transitionTopics as [`0x${string}`, ...`0x${string}`[]],
+        data: transitionData,
+      }),
+    ).toMatchObject({
+      eventName: "SeriesTransitionProcessed",
+      args: {
+        oldSeriesId: 1n,
+        newSeriesId: 2n,
+        oldPrincipal: 23n,
+        newPrincipal: 19n,
+        returnedDuringWindow: true,
+      },
+    });
+
+    const migrationTopics = encodeEventTopics({
+      abi: staticsDollarPeripheryAbi,
+      eventName: "PositionMigrationSettled",
+      args: { positionId: 7n, oldSeriesId: 1n, newSeriesId: 2n },
+    });
+    const migrationData = encodeAbiParameters(
+      parseAbiParameters(
+        "uint256 oldPrincipal,uint256 newPrincipal,uint256 staticsDollarCredit,uint256 collateralCredit",
+      ),
+      [23n, 19n, 19n, 5n],
+    );
+    expect(
+      decodeEventLog({
+        abi: staticsDollarPeripheryAbi,
+        topics: migrationTopics as [`0x${string}`, ...`0x${string}`[]],
+        data: migrationData,
+      }),
+    ).toMatchObject({
+      eventName: "PositionMigrationSettled",
+      args: {
+        positionId: 7n,
+        oldSeriesId: 1n,
+        newSeriesId: 2n,
+        oldPrincipal: 23n,
+        newPrincipal: 19n,
+        staticsDollarCredit: 19n,
+        collateralCredit: 5n,
+      },
+    });
+
+    const writeOffTopics = encodeEventTopics({
+      abi: staticsDollarPeripheryAbi,
+      eventName: "MigrationRoundingWrittenOff",
+      args: { positionId: 7n, oldSeriesId: 1n },
+    });
+    const writeOffData = encodeAbiParameters(
+      parseAbiParameters("uint256 nominalPrincipal,uint256 settledPrincipal"),
+      [23n, 22n],
+    );
+    expect(
+      decodeEventLog({
+        abi: staticsDollarPeripheryAbi,
+        topics: writeOffTopics as [`0x${string}`, ...`0x${string}`[]],
+        data: writeOffData,
+      }),
+    ).toMatchObject({
+      eventName: "MigrationRoundingWrittenOff",
+      args: {
+        positionId: 7n,
+        oldSeriesId: 1n,
+        nominalPrincipal: 23n,
+        settledPrincipal: 22n,
       },
     });
   });
@@ -1545,6 +1901,11 @@ describe("Statics unified calldata", () => {
         data: collateralError,
       }),
     ).toMatchObject({ errorName: "PositionSharesLocked", args: [10n, 8n] });
+    expect(
+      staticsCollateralErrorAbi.some(
+        (entry) => entry.type === "error" && entry.name === "PositionDepositTooRecent",
+      ),
+    ).toBe(false);
 
     const rewardError = encodeErrorResult({
       abi: staticsRewardsErrorAbi,
@@ -1572,6 +1933,22 @@ describe("Statics unified calldata", () => {
   });
 
   it("decodes the complete six-field position portfolio and Morpho market pages", () => {
+    const basketPosition = {
+      depositedShares: 10n,
+      lockedShares: 4n,
+      rewardEligibleAt: 1_700_000_000n,
+    };
+    const encodedBasketPosition = encodeFunctionResult({
+      abi: staticsAbi,
+      functionName: "basketCollateralPosition",
+      result: basketPosition,
+    });
+    expect(decodeFunctionResult({
+      abi: staticsAbi,
+      functionName: "basketCollateralPosition",
+      data: encodedBasketPosition,
+    })).toEqual(basketPosition);
+
     const counts: PositionPortfolioCounts = {
       basketCount: 1n,
       loanCount: 2n,
@@ -1639,26 +2016,33 @@ describe("Statics unified calldata", () => {
     })).toThrow("inputFeeBps exceeds uint16");
   });
 
-  it("encodes full canonical pool fee overrides and exports their events", () => {
-    const set = buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
-      inputFeeBps: 40n,
-      outputFeeBps: 60n,
-      polShareBps: 0n,
-      liquidityProviderShareBps: 0n,
-      basketStakerShareBps: 4_000n,
-      staticsStakerShareBps: 4_000n,
-      treasuryShareBps: 1_500n,
-    });
+  it("encodes canonical rate overrides with asserted global allocation", () => {
+    const currentGlobalConfiguration = {
+      inputFeeBps: 25n,
+      outputFeeBps: 25n,
+      polShareBps: 1_000n,
+      liquidityProviderShareBps: 2_500n,
+      basketStakerShareBps: 2_500n,
+      staticsStakerShareBps: 1_500n,
+      treasuryShareBps: 2_000n,
+    };
+    const set = buildSetCanonicalPoolFeeRateCall(
+      7n,
+      assetA,
+      40n,
+      60n,
+      currentGlobalConfiguration,
+    );
     const decoded = decodeFunctionData({ abi: staticsAbi, data: set });
     expect(decoded.functionName).toBe("setCanonicalPoolFeeConfiguration");
     expect(decoded.args).toEqual([7n, assetA, {
       inputFeeBps: 40,
       outputFeeBps: 60,
-      polShareBps: 0,
-      liquidityProviderShareBps: 0,
-      basketStakerShareBps: 4_000,
-      staticsStakerShareBps: 4_000,
-      treasuryShareBps: 1_500,
+      polShareBps: 1_000,
+      liquidityProviderShareBps: 2_500,
+      basketStakerShareBps: 2_500,
+      staticsStakerShareBps: 1_500,
+      treasuryShareBps: 2_000,
     }]);
     const clear = buildClearCanonicalPoolFeeConfigurationCall(7n, assetA);
     expect(decodeFunctionData({ abi: staticsAbi, data: clear }).functionName)
@@ -1669,6 +2053,9 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
       .toBe(true);
+    expect(staticsBasketErrorAbi.some(
+      (item) => item.type === "error" && item.name === "CanonicalPoolFeeAllocationMismatch",
+    )).toBe(true);
     expect(() => buildSetCanonicalPoolFeeConfigurationCall(7n, assetA, {
       inputFeeBps: 40n,
       outputFeeBps: 60n,
@@ -1783,6 +2170,27 @@ describe("Statics unified calldata", () => {
     }
     for (const name of eventNames) {
       expect(staticsAbi.some((entry) => entry.type === "event" && entry.name === name), name).toBe(true);
+    }
+    const beneficiaryError = encodeErrorResult({
+      abi: staticsMorphoErrorAbi,
+      errorName: "NotMorphoRecoveryBeneficiary",
+      args: [7n, sourceToken, receiver],
+    });
+    expect(decodeErrorResult({ abi: staticsMorphoErrorAbi, data: beneficiaryError })).toMatchObject({
+      errorName: "NotMorphoRecoveryBeneficiary",
+      args: [7n, sourceToken, receiver],
+    });
+    for (const name of [
+      "InvalidAmount",
+      "InvalidReceiver",
+      "InsufficientUntrackedCollateral",
+      "IncompatibleTokenTransfer",
+      "MorphoAccountNotDeployed",
+      "MinimumRecoveryNotMet",
+      "MorphoNotInitialized",
+      "InvalidMarket",
+    ]) {
+      expect(staticsMorphoErrorAbi.some((entry) => entry.type === "error" && entry.name === name), name).toBe(true);
     }
   });
 
