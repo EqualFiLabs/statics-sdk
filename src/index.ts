@@ -378,6 +378,15 @@ export const BasketStatus = {
 
 export type BasketStatus = typeof BasketStatus[keyof typeof BasketStatus];
 
+export const DollarRecoveryClaimMode = {
+  NAV: 0,
+  ExactUnits: 1,
+  CollateralOnly: 2,
+} as const;
+
+export type DollarRecoveryClaimMode =
+  typeof DollarRecoveryClaimMode[keyof typeof DollarRecoveryClaimMode];
+
 export const ProtocolPoolKind = {
   None: 0,
   BasketCanonical: 1,
@@ -1251,7 +1260,7 @@ export const staticsAbi = parseAbi([
   "function createAndMintBasketCollateral(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) payable returns (uint256 positionId,uint256[] amountsIn)",
   "function mintBasketCollateral(uint256 positionId,uint256 basketId,uint256 shares,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
   "function redeemBasketCollateral(uint256 positionId,uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
-  "function basketCollateralPosition(uint256 positionId,uint256 basketId) view returns ((uint256 depositedShares,uint256 lockedShares,uint256 withdrawableAfterBlock) position)",
+  "function basketCollateralPosition(uint256 positionId,uint256 basketId) view returns ((uint256 depositedShares,uint256 lockedShares,uint256 rewardEligibleAt) position)",
   "function getBasketRewardAssets(uint256 basketId) view returns (address[] assets)",
   "function getBasketRewards(uint256 positionId,uint256 basketId) view returns (address[] assets,uint256[] amounts)",
   "function claimBasketRewards(uint256 positionId,uint256 basketId,address receiver) returns (address[] assets,uint256[] amounts)",
@@ -1450,9 +1459,9 @@ export const staticsAbi = parseAbi([
   "function installLiquidityManager(address manager)",
   "function setSwapFeeConfiguration((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
   "function swapFeeConfiguration() view returns ((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "function setCanonicalPoolFeeConfiguration(uint256 basketId,address asset,(uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "function clearCanonicalPoolFeeConfiguration(uint256 basketId,address asset)",
-  "function canonicalPoolFeeConfiguration(uint256 basketId,address asset) view returns ((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps,bool overridden) configuration)",
+  "function setCanonicalPoolFeeRate(uint256 basketId,address asset,uint16 inputFeeBps,uint16 outputFeeBps)",
+  "function clearCanonicalPoolFeeRate(uint256 basketId,address asset)",
+  "function canonicalPoolFeeRate(uint256 basketId,address asset) view returns ((uint16 inputFeeBps,uint16 outputFeeBps,bool overridden) rate)",
   "function liquidityManager() view returns (address manager,bool installed)",
   "function unwindBasketLiquidity(uint256 basketId,address asset)",
   "function basketLiquidityUnwound(uint256 basketId,address asset) view returns (bool unwound)",
@@ -1539,8 +1548,8 @@ export const staticsAbi = parseAbi([
   "event LiquidityManagerInstalled(address indexed manager)",
   "event CanonicalPoolSyncedToManager(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,address manager)",
   "event SwapFeeConfigurationChanged((uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) configuration)",
-  "event CanonicalPoolFeeConfigurationSet(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint16 inputFeeBps,uint16 outputFeeBps,uint16 polShareBps,uint16 liquidityProviderShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
-  "event CanonicalPoolFeeConfigurationCleared(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId)",
+  "event CanonicalPoolFeeRateSet(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint16 inputFeeBps,uint16 outputFeeBps)",
+  "event CanonicalPoolFeeRateCleared(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId)",
   "event PermanentLiquidityTreasuryAccrued(uint256 indexed basketId,address indexed sourcePoolAsset,address indexed rewardAsset,uint256 amount)",
   "event BasketLiquidityUnwound(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,uint256 constituentReleased,uint256 basketTokensBurned)",
   "event BorrowedLiquidityPositionMinted(uint256 indexed loanId,uint256 indexed basketId,address indexed asset,uint256 v4TokenId,address recipient,uint256 liquidity,uint256 spent0,uint256 spent1,uint256 refund0,uint256 refund1)",
@@ -1575,6 +1584,18 @@ export const staticsPositionPortfolioAbi = parseAbi([
 
 export const staticsPositionPortfolioErrorAbi = parseAbi([
   "error InvalidPortfolioPageSize(uint256 requested,uint256 maximum)",
+]);
+
+export const staticsMorphoErrorAbi = parseAbi([
+  "error InvalidAmount()",
+  "error InvalidReceiver(address receiver)",
+  "error InsufficientUntrackedCollateral(uint256 requested,uint256 available)",
+  "error IncompatibleTokenTransfer(address token,uint256 expected,uint256 actual)",
+  "error MorphoAccountNotDeployed(uint256 positionId)",
+  "error MinimumRecoveryNotMet(address token,uint256 minimum,uint256 actual)",
+  "error MorphoNotInitialized()",
+  "error InvalidMarket(bytes32 marketId)",
+  "error NotMorphoRecoveryBeneficiary(uint256 positionId,address caller,address beneficiary)",
 ]);
 
 export const staticsSwapFeeHookAbi = parseAbi([
@@ -1715,8 +1736,8 @@ export type StaticsLiquidityEventName =
   | "LiquidityManagerInstalled"
   | "CanonicalPoolSyncedToManager"
   | "SwapFeeConfigurationChanged"
-  | "CanonicalPoolFeeConfigurationSet"
-  | "CanonicalPoolFeeConfigurationCleared"
+  | "CanonicalPoolFeeRateSet"
+  | "CanonicalPoolFeeRateCleared"
   | "PermanentLiquidityTreasuryAccrued"
   | "BasketLiquidityUnwound"
   | "BorrowedLiquidityPositionMinted"
@@ -1810,7 +1831,15 @@ export const basketTokenAbi = parseAbi([
   "function DOMAIN_SEPARATOR() view returns (bytes32)",
 ]);
 
-export const staticsDollarTokenAbi = basketTokenAbi;
+export const staticsDollarTokenAbi = [
+  ...basketTokenAbi,
+  ...parseAbi([
+    "function coreTokenKind() pure returns (bytes32)",
+    "function pool() view returns (address)",
+    "error NotMinter(address caller)",
+    "error NotBurner(address caller)",
+  ]),
+] as const;
 
 export const staticsBasketErrorAbi = parseAbi([
   "error BasketNotFound(uint256 basketId)",
@@ -1854,6 +1883,7 @@ export const staticsProtocolPoolErrorAbi = parseAbi([
   "error ActionPaused(uint256 action)",
   "error IncorrectCreationFee(uint256 expected,uint256 provided)",
   "error CreationFeeTransferFailed(address treasury,uint256 amount)",
+  "error InvalidCreator(address creator)",
   "error InvalidCreatorAuthorization(address creator)",
   "error PoolCreationNonceAlreadyUsed(address creator,uint256 nonce)",
   "error PoolAlreadyDecommissioned(bytes32 poolId)",
@@ -1909,7 +1939,6 @@ export const staticsCollateralErrorAbi = parseAbi([
   "error InsufficientPositionShares(uint256 requested,uint256 available)",
   "error PositionSharesLocked(uint256 requested,uint256 unlocked)",
   "error InsufficientLockedShares(uint256 requested,uint256 locked)",
-  "error PositionDepositTooRecent(uint256 positionId,uint256 basketId,uint256 withdrawableAfterBlock)",
 ]);
 
 export const staticsLendingErrorAbi = parseAbi([
@@ -1982,10 +2011,17 @@ export const staticsDollarRiskTokenAbi = parseAbi([
   "function balanceOf(address account,uint256 id) view returns (uint256)",
   "function isApprovedForAll(address account,address operator) view returns (bool)",
   "function setApprovalForAll(address operator,bool approved)",
+  "function coreTokenKind() pure returns (bytes32)",
+  "function pool() view returns (address)",
+  "function transfersFrozen(uint256 seriesId) view returns (bool)",
+  "function freezeTransfers(uint256 seriesId)",
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "event ApprovalForAll(address indexed account,address indexed operator,bool approved)",
   "event TransferSingle(address indexed operator,address indexed from,address indexed to,uint256 id,uint256 value)",
+  "event SeriesTransfersFrozen(uint256 indexed seriesId)",
+  "error NotPool(address caller)",
+  "error FrozenSeriesTransfer(uint256 seriesId)",
 ]);
 
 export const wethAbi = parseAbi([
@@ -2000,6 +2036,7 @@ export const staticsDollarCoreAbi = parseAbi([
   "function staticsDollar() view returns (address)",
   "function staticsDollarRisk() view returns (address)",
   "function periphery() view returns (address)",
+  "function positionNFT() view returns (address)",
   "function bootstrapFinalized() view returns (bool)",
   "function seniorLiabilities() view returns (uint256)",
   "function globalImpairmentLatched() view returns (bool)",
@@ -2007,6 +2044,13 @@ export const staticsDollarCoreAbi = parseAbi([
   "function riskSeries(uint256 seriesId) view returns ((uint256 profileId,address collateralToken,uint256 seniorOutstanding,uint256 riskSharesOutstanding,uint256 accountedCollateral,uint256 startPriceWad,uint256 collateralPerPairWad,uint256 seniorCollateralPerUnitWad,uint256 juniorCollateralPerUnitWad,uint256 collateralRatioBps,uint256 priceBandBps,uint256 startedAt,uint256 retiredAt,uint256 successorSeriesId,uint8 status) series)",
   "function previewDeposit(uint256 profileId,uint256 collateralAmount) view returns ((uint256 profileId,uint256 seriesId,uint256 collateralIn,uint256 staticsDollarMinted,uint256 sharesMinted,uint256 feeAmount,uint256 insuranceContribution,uint256 priceWad,uint256 collateralPerPairWad,uint256 collateralRatioBpsAfter) preview)",
   "function previewRecombine(uint256 seriesId,uint256 staticsDollarAmount) view returns ((uint256 profileId,uint256 seriesId,address collateralToken,uint256 staticsDollarBurned,uint256 sharesBurned,uint256 collateralOut,uint256 feeAmount,uint256 priceWad,uint256 collateralRatioBpsAfter) preview)",
+  "function recombine(uint256 seriesId,uint256 staticsDollarAmount,uint256 shareAmount,uint256 minimumCollateralOut,address receiver) returns (uint8 status,uint256 collateralOut)",
+  "function returnRiskShares(uint256 seriesId,uint256 shares)",
+  "function reclaimReturnedRiskShares(uint256 seriesId,address receiver) returns (uint256 shares)",
+  "function previewReturnedRiskClaim(address holder,uint256 seriesId,uint8 mode) view returns ((uint256 oldSeriesId,uint256 successorSeriesId,uint256 oldShares,uint256 juniorCollateral,uint256 collateralIn,uint256 collateralOut,uint256 successorPairs) preview)",
+  "function claimReturnedRisk(uint256 seriesId,uint8 mode,uint256 maximumCollateralIn,uint256 minimumSharesOut,uint256 minimumCollateralOut,address receiver) returns (uint256 successorPairs,uint256 collateralIn,uint256 collateralOut)",
+  "function previewExpiredRiskRecovery(address holder,uint256 seriesId,uint256 shares,uint8 mode) view returns ((uint256 oldSeriesId,uint256 successorSeriesId,uint256 sharesBurned,uint256 staticsDollarBurned,uint256 seniorCollateralOut,uint256 juniorCollateral,uint256 keeperBounty,uint256 holderCollateral,uint256 holderPairs,uint256 holderCollateralDust) preview)",
+  "function recoverExpiredRisk(address holder,uint256 seriesId,uint256 shares,uint8 mode,uint256 minimumKeeperOut) returns (uint256 staticsDollarBurned,uint256 keeperCollateralOut,uint256 holderPairs)",
   "function profileSolvency(uint256 profileId) view returns ((uint256 collateralValueWad,uint256 seniorLiabilitiesWad,uint256 seniorDeficitWad,bool oracleAvailable,bool healthy) solvency)",
   "function globalImpairment() view returns (uint8 phase,uint256 unhealthyProfileBitmap,uint256 totalSeniorDeficitWad,uint256 recoveryAvailableAt)",
   "function peggedRedemptionStatus() view returns (uint8 status,uint256 unhealthyProfileBitmap,uint256 totalSeniorDeficitWad,uint256 recoveryAvailableAt)",
@@ -2015,6 +2059,13 @@ export const staticsDollarCoreAbi = parseAbi([
   "function collateralUsdPriceWad(uint256 profileId) view returns (uint256 priceWad)",
   "function profileSeriesCount(uint256 profileId) view returns (uint256 count)",
   "function profileSeriesAt(uint256 profileId,uint256 index) view returns (uint256 seriesId)",
+  "event Recombined(address indexed caller,address indexed receiver,uint256 indexed seriesId,uint256 staticsDollarBurned,uint256 sharesBurned,address collateralToken,uint256 collateralOut,uint256 collateralRatioBpsAfter)",
+  "event CollateralExitDeferred(address indexed caller,address indexed receiver,uint256 indexed seriesId,uint8 status,uint256 unhealthyProfileBitmap)",
+  "event RiskSharesReturned(address indexed holder,uint256 indexed seriesId,uint256 shares)",
+  "event ReturnedRiskSharesReclaimed(address indexed holder,address indexed receiver,uint256 indexed seriesId,uint256 shares)",
+  "event ReturnedRiskClaimed(address indexed holder,address indexed receiver,uint256 indexed oldSeriesId,uint256 oldShares,uint256 successorPairs,uint256 collateralIn,uint256 collateralOut)",
+  "event ExpiredRiskRecovered(address indexed keeper,address indexed holder,uint256 indexed oldSeriesId,uint256 sharesBurned,uint256 staticsDollarBurned,uint256 seniorCollateralOut,uint256 keeperBounty,uint256 holderPairs,uint256 holderCollateralDust)",
+  "event SeriesClosed(uint256 indexed profileId,uint256 indexed seriesId)",
 ]);
 
 /**
@@ -2053,13 +2104,19 @@ export const staticsDollarPeripheryAbi = parseAbi([
   "function reservedBalance(address token) view returns (uint256 amount)",
   "event RiskSharesStaked(uint256 indexed positionId,uint256 indexed seriesId,address indexed supplier,uint256 amount)",
   "event RiskSharesUnstaked(uint256 indexed positionId,uint256 indexed seriesId,address indexed receiver,uint256 amount)",
+  "event RiskLiquidityClosed(uint256 indexed positionId,uint256 indexed seriesId)",
+  "event RiskLiquidityDustCleared(uint256 indexed positionId,uint256 indexed seriesId,uint256 storedUnits)",
   "event RiskProceedsClaimed(uint256 indexed positionId,uint256 indexed seriesId,address indexed receiver,address collateralToken,address staticsToken,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskProceedsAccrued(uint256 indexed seriesId,uint64 indexed epoch,address indexed token,uint256 amount,bytes32 source)",
   "event RiskProceedsSettled(uint256 indexed positionId,uint256 indexed seriesId,uint256 collateralAdded,uint256 staticsDollarAdded,uint256 staticsAdded,uint256 accruedCollateral,uint256 accruedStaticsDollar,uint256 accruedStatics)",
+  "event RiskProceedsResidueAssigned(uint256 indexed positionId,uint256 indexed seriesId,uint64 indexed epoch,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskIncentivesFunded(uint256 indexed seriesId,address indexed token,address indexed funder,uint256 requestedAmount,uint256 receivedAmount)",
   "event RiskIncentivesReleased(uint256 indexed seriesId,uint64 indexed epoch,uint256 riskSharesConsumed,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskIncentivesRolledOver(uint256 indexed seriesId,uint256 indexed destinationSeriesId,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
   "event RiskIncentivesRoutedGlobal(uint256 indexed seriesId,uint256 collateralAmount,uint256 staticsDollarAmount,uint256 staticsAmount)",
+  "event SeriesTransitionProcessed(uint256 indexed oldSeriesId,uint256 indexed newSeriesId,uint256 oldPrincipal,uint256 newPrincipal,bool returnedDuringWindow)",
+  "event PositionMigrationSettled(uint256 indexed positionId,uint256 indexed oldSeriesId,uint256 indexed newSeriesId,uint256 oldPrincipal,uint256 newPrincipal,uint256 staticsDollarCredit,uint256 collateralCredit)",
+  "event MigrationRoundingWrittenOff(uint256 indexed positionId,uint256 indexed oldSeriesId,uint256 nominalPrincipal,uint256 settledPrincipal)",
 
   // -- PairingVaultFacet: redeeming Dollar alone against that liquidity
   "function redeem(uint256 seriesId,uint256 staticsDollarAmount,uint256 minStaticsDollarRedeemed,uint256 minCollateralPerStaticsDollarWad,uint256 deadline,address receiver) returns (uint8 status,uint256 staticsDollarRedeemed,uint256 collateralOut)",
@@ -2102,12 +2159,18 @@ export const staticsDollarPeripheryErrorAbi = parseAbi([
   "error FixedAllocationExceedsGross(uint256 fixedSeniorCollateral,uint256 grossCollateral)",
   "error RiskLiquidityScaleExhausted(uint256 storedUnits)",
   "error ConsumeExceedsLiquidity(uint256 requested,uint256 available)",
+  "error InvalidEpochSettlement(uint256 seriesId,uint64 epoch,uint256 stored,uint256 remainingStored)",
   "error InsufficientUnreserved(address token,uint256 requested,uint256 available)",
   "error GlobalReservationShortfall(address token,uint256 reserved,uint256 balance)",
+  "error InvalidTransferReceiver(address receiver)",
+  "error DebitBelowRequested(address token,uint256 spent,uint256 requested)",
   "error DebitExceedsAuthorization(address token,uint256 spent,uint256 maximum)",
   "error BalanceDecreasedDuringPull(address token,uint256 beforeBalance,uint256 afterBalance)",
   "error SeriesMigrationNotReady(uint256 seriesId)",
   "error SeriesMigrationAlreadyProcessed(uint256 seriesId)",
+  "error SeriesMigrationReclaimPending(uint256 seriesId)",
+  "error UnexpectedRiskIngress(address token,address operator,address from,uint256 seriesId,uint256 amount)",
+  "error RiskBatchIngressUnsupported()",
   "error NotContractOwner(address caller,address owner)",
   // OpenZeppelin reverts these facets inherit. Without them an ordinary
   // transfer failure decodes as an unknown selector.
@@ -2118,8 +2181,10 @@ export const staticsDollarPeripheryErrorAbi = parseAbi([
 export const staticsDollarErrorAbi = parseAbi([
   "error ZeroAddress()",
   "error ZeroAmount()",
+  "error InvalidShareAmount(uint256 provided,uint256 required)",
   "error InvalidProfile(uint256 profileId)",
   "error InvalidSeries(uint256 seriesId)",
+  "error InvalidSeriesGeometry(uint256 priceWad,uint256 collateralRatioBps)",
   "error InvalidProfileKind(uint256 profileId,uint8 expected,uint8 actual)",
   "error InvalidProfileMode(uint256 profileId,uint8 mode)",
   "error ProfileOperationPaused(uint256 profileId,uint256 operation)",
@@ -2131,8 +2196,16 @@ export const staticsDollarErrorAbi = parseAbi([
   "error RedemptionTooSmall()",
   "error DebtCeilingExceeded(uint256 profileId,uint256 attemptedSeniorOutstanding,uint256 debtCeiling)",
   "error SeriesNotActive(uint256 seriesId)",
+  "error EmptyPool()",
+  "error SeriesNotPending(uint256 seriesId)",
+  "error ReturnWindowClosed(uint256 seriesId)",
+  "error NoReturnedShares(uint256 seriesId,address holder)",
+  "error SeriesNotRecoverable(uint256 seriesId)",
+  "error SlippageExceeded(uint256 actual,uint256 minimum)",
+  "error InvalidRecoveryMode(uint8 mode)",
   "error TransitionRequired(uint256 profileId,uint256 seriesId,uint256 currentPriceWad)",
   "error CollateralExitUnavailable(uint8 status,uint256 unhealthyProfileBitmap)",
+  "error CollateralExitWorsensHealth(uint256 profileId,uint8 projectedPhase,uint256 baselineDeficitWad,uint256 projectedDeficitWad)",
   "error UnexpectedCollateralProfile(uint256 expectedProfileId,uint256 actualProfileId)",
   "error InsufficientTransferReceived(address token,uint256 required,uint256 received)",
   "error UnexpectedOutputAmount(address token,uint256 expected,uint256 observed)",
@@ -2140,6 +2213,8 @@ export const staticsDollarErrorAbi = parseAbi([
   "error UnexpectedExitStatus(uint8 status)",
   "error UnexpectedRiskIngressState()",
   "error NativeTransferFailed(address receiver,uint256 amount)",
+  "error Unauthorized(address caller)",
+  "error PartialRecoveryNotAllowed(address holder,uint256 provided,uint256 fullBalance)",
 ]);
 
 /// Builds a Genesis acquisition. `maxNativeValue` is the maximum native ETH the caller
@@ -3006,20 +3081,6 @@ function coerceSwapFeeConfiguration(configuration: SwapFeeConfiguration) {
   };
 }
 
-function validatedPoolFeeConfiguration(configuration: SwapFeeConfiguration) {
-  if (configuration.inputFeeBps + configuration.outputFeeBps > 200n) {
-    throw new Error("combined pool fee rate exceeds 200 BPS");
-  }
-  if (
-    configuration.polShareBps + configuration.liquidityProviderShareBps
-      + configuration.basketStakerShareBps + configuration.staticsStakerShareBps
-      + configuration.treasuryShareBps !== CONFIGURABLE_SHARE_BPS
-  ) {
-    throw new Error("pool fee shares must sum to 9500 BPS");
-  }
-  return coerceSwapFeeConfiguration(configuration);
-}
-
 export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfiguration): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
@@ -3028,15 +3089,17 @@ export function buildSetSwapFeeConfigurationCall(configuration: SwapFeeConfigura
   });
 }
 
-export function buildSetCanonicalPoolFeeConfigurationCall(
+export function buildSetCanonicalPoolFeeRateCall(
   basketId: bigint,
   asset: Address,
-  configuration: SwapFeeConfiguration,
+  inputFeeBps: bigint,
+  outputFeeBps: bigint,
 ): Hex {
+  const feeRate = validatedPoolSwapFeeRate({ inputFeeBps, outputFeeBps });
   return encodeFunctionData({
     abi: staticsAbi,
-    functionName: "setCanonicalPoolFeeConfiguration",
-    args: [basketId, asset, validatedPoolFeeConfiguration(configuration)],
+    functionName: "setCanonicalPoolFeeRate",
+    args: [basketId, asset, feeRate.inputFeeBps, feeRate.outputFeeBps],
   });
 }
 
@@ -3406,10 +3469,10 @@ export function buildReplaceLiquidityManagerCall(newManager: Address): Hex {
   });
 }
 
-export function buildClearCanonicalPoolFeeConfigurationCall(basketId: bigint, asset: Address): Hex {
+export function buildClearCanonicalPoolFeeRateCall(basketId: bigint, asset: Address): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
-    functionName: "clearCanonicalPoolFeeConfiguration",
+    functionName: "clearCanonicalPoolFeeRate",
     args: [basketId, asset],
   });
 }
@@ -3501,6 +3564,100 @@ export function buildClaimLiquidityRewardsCall(
     abi: staticsAbi,
     functionName: "claimLiquidityRewards",
     args: [positionId, tokenId, receiver, minAmount0, minAmount1],
+  });
+}
+
+export function buildDollarCoreRecombineCall(
+  seriesId: bigint,
+  staticsDollarAmount: bigint,
+  shareAmount: bigint,
+  minimumCollateralOut: bigint,
+  receiver: Address,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "recombine",
+    args: [seriesId, staticsDollarAmount, shareAmount, minimumCollateralOut, receiver],
+  });
+}
+
+export function buildReturnRiskSharesCall(seriesId: bigint, shares: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "returnRiskShares",
+    args: [seriesId, shares],
+  });
+}
+
+export function buildReclaimReturnedRiskSharesCall(
+  seriesId: bigint,
+  receiver: Address,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "reclaimReturnedRiskShares",
+    args: [seriesId, receiver],
+  });
+}
+
+export function buildPreviewReturnedRiskClaimCall(
+  holder: Address,
+  seriesId: bigint,
+  mode: DollarRecoveryClaimMode,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "previewReturnedRiskClaim",
+    args: [holder, seriesId, mode],
+  });
+}
+
+export function buildClaimReturnedRiskCall(
+  seriesId: bigint,
+  mode: DollarRecoveryClaimMode,
+  maximumCollateralIn: bigint,
+  minimumSharesOut: bigint,
+  minimumCollateralOut: bigint,
+  receiver: Address,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "claimReturnedRisk",
+    args: [
+      seriesId,
+      mode,
+      maximumCollateralIn,
+      minimumSharesOut,
+      minimumCollateralOut,
+      receiver,
+    ],
+  });
+}
+
+export function buildPreviewExpiredRiskRecoveryCall(
+  holder: Address,
+  seriesId: bigint,
+  shares: bigint,
+  mode: DollarRecoveryClaimMode,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "previewExpiredRiskRecovery",
+    args: [holder, seriesId, shares, mode],
+  });
+}
+
+export function buildRecoverExpiredRiskCall(
+  holder: Address,
+  seriesId: bigint,
+  shares: bigint,
+  mode: DollarRecoveryClaimMode,
+  minimumKeeperOut: bigint,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsDollarCoreAbi,
+    functionName: "recoverExpiredRisk",
+    args: [holder, seriesId, shares, mode, minimumKeeperOut],
   });
 }
 
