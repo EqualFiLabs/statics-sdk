@@ -24,6 +24,11 @@ import {
   buildBorrowAndProvideLiquidityCall,
   buildBorrowAndStakeLiquidityCall,
   buildBorrowCall,
+  buildFlashLoanAssetCall,
+  buildFlashLoanCall,
+  buildMaxFlashLoanCall,
+  buildQuoteFlashLoanAssetCall,
+  buildQuoteFlashLoanCall,
   buildClearCanonicalPoolFeeConfigurationCall,
   buildClaimRewardsCall,
   buildClaimBasketRewardsCall,
@@ -73,6 +78,7 @@ import {
   buildSetTreasuryWithdrawalRecipientCall,
   buildSetGenesisRewardShareBpsCall,
   buildSetPositionCreationFeeCall,
+  buildSetSingleAssetFlashFeeBpsCall,
   buildActivateGenesisCall,
   buildCheckpointRewardAssetsCall,
   buildClaimCreatorRevenueCall,
@@ -191,6 +197,7 @@ import {
   staticsSwapFeeHookAbi,
   staticsGenesisAbi,
   staticsGenesisErrorAbi,
+  staticsFlashAssetBorrowerAbi,
   staticsProtocolRevenueErrorAbi,
   staticsTokenAbi,
   staticsTestnetFaucetAbi,
@@ -205,6 +212,8 @@ import {
   type PermitSignature,
   type PositionPortfolioCounts,
   type UnderlyingLiquidityAdapter,
+  STATICS_FLASH_ASSET_CALLBACK_SUCCESS,
+  STATICS_FLASH_CALLBACK_SUCCESS,
 } from "../src/index.js";
 
 const assetA = "0x0000000000000000000000000000000000000001";
@@ -1216,6 +1225,47 @@ describe("Statics unified calldata", () => {
     expect(
       decodeFunctionData({ abi: staticsAbi, data: buildRecoverCall(23n) }),
     ).toEqual({ functionName: "recover", args: [23n] });
+  });
+
+  it("exposes basket-vector and dedicated single-asset flash bindings", () => {
+    const basketFlash = buildFlashLoanCall(7n, 2n, receiver, "0x1234");
+    expect(decodeFunctionData({ abi: staticsAbi, data: basketFlash })).toEqual({
+      functionName: "flashLoan",
+      args: [7n, 2n, receiver, "0x1234"],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuoteFlashLoanCall(7n, 2n) })).toEqual({
+      functionName: "quoteFlashLoan",
+      args: [7n, 2n],
+    });
+
+    const assetFlash = buildFlashLoanAssetCall(assetA, 10n, receiver, "0xabcd");
+    expect(decodeFunctionData({ abi: staticsAbi, data: assetFlash })).toEqual({
+      functionName: "flashLoanAsset",
+      args: [assetA, 10n, receiver, "0xabcd"],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuoteFlashLoanAssetCall(assetA, 10n) })).toEqual({
+      functionName: "quoteFlashLoanAsset",
+      args: [assetA, 10n],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildMaxFlashLoanCall(assetA) })).toEqual({
+      functionName: "maxFlashLoan",
+      args: [assetA],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetSingleAssetFlashFeeBpsCall(25) })).toEqual({
+      functionName: "setSingleAssetFlashFeeBps",
+      args: [25],
+    });
+
+    for (const eventName of ["BasketFlashLoan", "AssetFlashLoan", "SingleAssetFlashFeeBpsUpdated"]) {
+      expect(staticsAbi.some((entry) => entry.type === "event" && entry.name === eventName)).toBe(true);
+    }
+    expect(getAbiItem({ abi: staticsFlashAssetBorrowerAbi, name: "onStaticsFlashLoanAsset" })).toBeDefined();
+    expect(STATICS_FLASH_CALLBACK_SUCCESS).toBe(
+      keccak256(Buffer.from("IStaticsFlashBorrower.onStaticsFlashLoan")),
+    );
+    expect(STATICS_FLASH_ASSET_CALLBACK_SUCCESS).toBe(
+      keccak256(Buffer.from("IStaticsFlashAssetBorrower.onStaticsFlashLoanAsset")),
+    );
   });
 
   it("exposes position reward claims and terminal lifecycle calls", () => {

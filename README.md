@@ -169,6 +169,17 @@ The SDK never selects a venue, hardcodes a router, or submits transactions.
 Lifecycle helpers expose quarantine, release, and permanent decommissioning;
 `allowsExposureIncrease` maps the basket status to user-facing action gating.
 
+Basket flash loans continue to derive their complete constituent vector and
+fee from the selected basket, but `maxFlashLoan(asset)` and the dedicated
+`flashLoanAsset` path use the Diamond's full physical ERC-20 balance. Use
+`buildQuoteFlashLoanCall`/`buildFlashLoanCall` for basket vectors and
+`buildQuoteFlashLoanAssetCall`/`buildFlashLoanAssetCall` for one asset. A
+single-asset receiver implements the exported `staticsFlashAssetBorrowerAbi`
+callback and returns `STATICS_FLASH_ASSET_CALLBACK_SUCCESS`; it must approve
+the quoted principal plus fee for collection before returning. Single-asset
+fees are protocol-wide, ceil-rounded, and governed independently from each
+basket's `flashFeeBps`.
+
 ## Protocol liquidity
 
 The package exports the Diamond liquidity and global-reward ABI plus hook,
