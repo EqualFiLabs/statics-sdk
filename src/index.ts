@@ -51,6 +51,10 @@ export const GENESIS_RESERVE_DENOMINATOR = GENESIS_COLLECTION_SIZE;
 export const GENESIS_RESERVE_BUY_IN_DENOMINATOR = GENESIS_COLLECTION_SIZE - 1n;
 export const GENESIS_DEFAULT_NATIVE_ACQUISITION_FEE = 3n * 10n ** 15n;
 export const GENESIS_MAX_NATIVE_ACQUISITION_FEE = 10n * 10n ** 15n;
+export const STATICS_FLASH_CALLBACK_SUCCESS = keccak256(toHex("IStaticsFlashBorrower.onStaticsFlashLoan"));
+export const STATICS_FLASH_ASSET_CALLBACK_SUCCESS = keccak256(
+  toHex("IStaticsFlashAssetBorrower.onStaticsFlashLoanAsset"),
+);
 
 export type DopplerGenesisCurve = {
   name: "low" | "medium" | "high" | "filler";
@@ -1370,6 +1374,12 @@ export const staticsAbi = parseAbi([
   "function outstandingPrincipal(uint256 basketId,address asset) view returns (uint256)",
   "function recoveryGracePeriod() view returns (uint256)",
   "function flashLoan(uint256 basketId,uint256 shares,address receiver,bytes data)",
+  "function quoteFlashLoan(uint256 basketId,uint256 shares) view returns (address[] assets,uint256[] amounts,uint256[] fees)",
+  "function flashLoanAsset(address asset,uint256 amount,address receiver,bytes data)",
+  "function quoteFlashLoanAsset(address asset,uint256 amount) view returns (uint256 fee)",
+  "function maxFlashLoan(address asset) view returns (uint256)",
+  "function singleAssetFlashFeeBps() view returns (uint16)",
+  "function setSingleAssetFlashFeeBps(uint16 newFeeBps)",
   "function balanceOf(address owner) view returns (uint256)",
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function getApproved(uint256 tokenId) view returns (address)",
@@ -1495,6 +1505,9 @@ export const staticsAbi = parseAbi([
   "event LoanExtensionFeePaid(uint256 indexed loanId,address indexed asset,uint256 requiredFee,uint256 receivedFee)",
   "event LoanRecovered(uint256 indexed loanId,uint256 indexed positionId,address indexed caller,uint256 burnedShares,uint256 unlockedShares)",
   "event RecoveryPenaltyDistributed(uint256 indexed loanId,address indexed asset,uint256 callerAmount,uint256 callerReceived,uint256 protocolAmount)",
+  "event BasketFlashLoan(uint256 indexed basketId,address indexed initiator,address indexed receiver,uint256 shares,uint256[] amounts,uint256[] fees)",
+  "event AssetFlashLoan(address indexed asset,address indexed initiator,address indexed receiver,uint256 amount,uint256 fee)",
+  "event SingleAssetFlashFeeBpsUpdated(uint16 previousFeeBps,uint16 newFeeBps)",
   "event StakingPositionCreated(uint256 indexed positionId,address indexed owner,uint256 amount)",
   "event Staked(uint256 indexed positionId,address indexed payer,uint256 amount,uint256 totalPositionStake)",
   "event Unstaked(uint256 indexed positionId,address indexed receiver,uint256 amount,uint256 totalPositionStake)",
@@ -1553,6 +1566,10 @@ export const staticsAbi = parseAbi([
   "event LiquidityRewardAccrued(bytes32 indexed poolId,address indexed asset,uint256 amount,uint256 indexRay)",
   "event LiquidityRewardSettled(uint256 indexed positionId,uint256 indexed tokenId,address indexed asset,uint256 amount)",
   "event LiquidityRewardClaimed(uint256 indexed positionId,uint256 indexed tokenId,address indexed asset,address receiver,uint256 amount)",
+]);
+
+export const staticsFlashAssetBorrowerAbi = parseAbi([
+  "function onStaticsFlashLoanAsset(address initiator,address asset,uint256 amount,uint256 fee,bytes data) returns (bytes32)",
 ]);
 
 export const staticsPositionPortfolioAbi = parseAbi([
@@ -2998,6 +3015,26 @@ export function buildRecoverCall(loanId: bigint): Hex {
 
 export function buildFlashLoanCall(basketId: bigint, shares: bigint, receiver: Address, data: Hex): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "flashLoan", args: [basketId, shares, receiver, data] });
+}
+
+export function buildQuoteFlashLoanCall(basketId: bigint, shares: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "quoteFlashLoan", args: [basketId, shares] });
+}
+
+export function buildFlashLoanAssetCall(asset: Address, amount: bigint, receiver: Address, data: Hex): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "flashLoanAsset", args: [asset, amount, receiver, data] });
+}
+
+export function buildQuoteFlashLoanAssetCall(asset: Address, amount: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "quoteFlashLoanAsset", args: [asset, amount] });
+}
+
+export function buildMaxFlashLoanCall(asset: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "maxFlashLoan", args: [asset] });
+}
+
+export function buildSetSingleAssetFlashFeeBpsCall(newFeeBps: number): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "setSingleAssetFlashFeeBps", args: [newFeeBps] });
 }
 
 export function buildCreatePositionCall(receiver: Address): Hex {
