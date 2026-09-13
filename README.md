@@ -267,7 +267,7 @@ match the swap exactly.
 `quoteExactInputHookFee` charges `ceil(gross * bps / 10,000)`, while
 `quoteExactOutputHookFee` gross-ups a requested net amount with
 `ceil(net * bps / (10,000 - bps))`. `effectiveCanonicalFees` reports the
-deployment-configured native LP fee and the separate input/output hook rates;
+deployment-configured native LP fee in exact pips and the separate input/output hook rates;
 the checked-in Robinhood defaults are 3,000 native-fee pips and 50 hook-fee
 basis points on each leg. `splitSwapFee` carves the fixed 5% creator share first,
 then applies the pool-class allocation among protocol-owned liquidity,
@@ -276,6 +276,13 @@ unavailable basket-staker share routes to protocol-owned liquidity, an
 unavailable Statics-staker share routes to treasury, the creator share never
 falls back, and treasury absorbs rounding dust. Matched locked liquidity is
 added as hook-owned full-range liquidity during the swap.
+
+Native fees earned by that permanent position are separate treasury revenue.
+Governance configures the authorized caller with
+`buildSetPermanentLiquidityHarvesterCall`; that caller uses
+`buildHarvestPermanentLiquidityFeesCall`, which exposes no recipient choice.
+The SDK preserves all valid native fee values below 1,000,000 pips without
+rounding them to whole basis points.
 
 Genesis builders activate tiers by paying the cumulative configured STATICS
 cost — forwarded in full to the treasury, never burned — link one activated
