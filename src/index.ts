@@ -1607,6 +1607,7 @@ export const staticsSwapFeeHookAbi = parseAbi([
   "function releasePermanentLiquidity((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address receiver) returns ((uint256 principal0,uint256 principal1,uint256 pendingPol0,uint256 pendingPol1,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution0,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution1) released)",
   "event PoolRegistered(bytes32 indexed poolId,address indexed currency0,address indexed currency1,uint8 kind,address creator)",
   "event SwapLegFeeAccrued(bytes32 indexed poolId,address indexed currency,bool indexed specifiedLeg,uint256 realizedAmount,uint256 chargedAmount,uint256 polAmount,uint256 basketStakerAmount,uint256 staticsStakerAmount,uint256 creatorAmount,uint256 treasuryAmount)",
+  "event PendingFeeDistributionReallocated(bytes32 indexed poolId,address indexed currency,uint256 basketStakerToPol,uint256 staticsStakerToTreasury)",
   "event PermanentLiquidityAdded(bytes32 indexed poolId,uint128 liquidity,uint256 amount0,uint256 amount1,uint256 pending0,uint256 pending1)",
   "event PermanentLiquiditySeeded(bytes32 indexed poolId,uint128 liquidity,uint256 amount0,uint256 amount1)",
   "event PermanentLiquidityFeesAccrued(bytes32 indexed poolId,address indexed currency,uint256 amount)",
@@ -1715,6 +1716,8 @@ export type StaticsLiquidityEventName =
   | "BasketFeeAllocationSet"
   | "GeneralFeeAllocationSet"
   | "GeneralPoolDecommissioned"
+  | "PermanentLiquidityHarvesterSet"
+  | "PermanentLiquidityFeesHarvested"
   | "CreatorRevenueAccrued"
   | "CreatorRevenueClaimed"
   | "LiquidityManagerReplaced"
@@ -1775,9 +1778,11 @@ export type StaticsLendingEventArgs<Name extends StaticsLendingEventName> =
 export type StaticsHookEventName =
   | "PoolRegistered"
   | "SwapLegFeeAccrued"
+  | "PendingFeeDistributionReallocated"
   | "PermanentLiquidityAdded"
   | "PermanentLiquiditySeeded"
-  | "PermanentLiquidityFeesRouted"
+  | "PermanentLiquidityFeesAccrued"
+  | "PermanentLiquidityFeesHarvested"
   | "PermanentLiquidityReleased"
   | "PoolDecommissioned"
   | "PoolFeeRateSet"
