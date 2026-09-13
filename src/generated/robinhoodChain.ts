@@ -3,8 +3,8 @@
 export const robinhoodChain = {
   "network": "Robinhood Chain",
   "chainId": 4663,
-  "forkBlock": 14498238,
-  "forkBlockHash": "0x6aa5df55371aa944352e06703b7905fb0ddf3a58c495833ee7595ef08aa46417",
+  "forkBlock": 45234855,
+  "forkBlockHash": "0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d",
   "inputFeeBps": 50,
   "outputFeeBps": 50,
   "hookPermissionMask": "0x10ec",
@@ -12,13 +12,16 @@ export const robinhoodChain = {
     "inputFeeBps": 50,
     "outputFeeBps": 50,
     "hookPermissionMask": "0x10ec",
-    "canonicalLpFeePips": 0,
+    "canonicalLpFeePips": 3000,
     "canonicalTickSpacing": 10,
-    "polShareBps": 1000,
-    "liquidityProviderShareBps": 2500,
-    "basketStakerShareBps": 2500,
-    "staticsStakerShareBps": 1500,
-    "treasuryShareBps": 2500,
+    "polShareBps": 1500,
+    "basketStakerShareBps": 3000,
+    "staticsStakerShareBps": 3000,
+    "creatorShareBps": 500,
+    "treasuryShareBps": 2000,
+    "generalPolShareBps": 4000,
+    "generalStaticsStakerShareBps": 3500,
+    "generalTreasuryShareBps": 2000,
     "hookPermissions": [
       "afterInitialize",
       "beforeSwap",
@@ -54,7 +57,8 @@ export const robinhoodChain = {
       "runtimeCodeHash": "0x5208783f52488f7d3493e5e38311ab707c1d75457fe472a19b0b4d57d66a7fca"
     },
     "weth": {
-      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
     }
   }
 } as const;

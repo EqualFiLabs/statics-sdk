@@ -66,12 +66,12 @@ the WETH remainder to the active distributor. Activation forwards its exact
 STATICS cost to the treasury and never burns STATICS.
 
 `splitSwapFee` mirrors the bilateral swap-fee split across protocol-owned
-liquidity, activated protocol-pool LPs, deposited BasketToken positions, global
-Statics stakers, the fixed 5% pool creator, and treasury. The five configurable
-class shares always total 9,500 basis points and the creator share is a fixed
-500. Treasury receives division dust. Unavailable LP and basket-staker
-allocations redirect to protocol-owned liquidity; an unavailable Statics-staker
-allocation redirects to treasury; the creator share never falls back.
+liquidity, deposited BasketToken positions, global Statics stakers, the fixed
+5% pool creator, and treasury. The configurable class shares always total 9,500
+basis points and the creator share is a fixed 500. Treasury receives division
+dust. An unavailable basket-staker allocation redirects to protocol-owned
+liquidity; an unavailable Statics-staker allocation redirects to treasury; the
+creator share never falls back.
 
 `quoteMint` and `quoteRedeem` select the greatest qualifying static fee tier
 and reproduce the aggregate-supply rounding used onchain. They do not model a
@@ -264,18 +264,18 @@ After the wallet grants the one-time ERC-20 allowance to Permit2,
 allowance and swap atomic. The signed token, amount, and router are required to
 match the swap exactly.
 
-`quoteHookFee` rounds either realized bilateral fee leg up exactly as the hook
-does. `effectiveCanonicalFees` reports the zero native LP fee and the separate
-input/output hook rates; the launch defaults are 25 basis points on each leg.
-`splitSwapFee` carves the fixed 5% creator share first, then applies the active
-class allocation profile's five configurable shares — protocol-owned liquidity,
-canonical LP, basket-staker, global Statics-staker, and treasury — which always
-total 9,500 basis points. Callers supply each reward destination's eligibility
-independently: an unavailable LP or basket-staker share routes to protocol-owned
-liquidity, an unavailable Statics-staker share routes to treasury, the creator
-share never falls back, and treasury absorbs the rounding dust. Matched locked
-liquidity is added as
-hook-owned full-range liquidity during the swap.
+`quoteExactInputHookFee` charges `ceil(gross * bps / 10,000)`, while
+`quoteExactOutputHookFee` gross-ups a requested net amount with
+`ceil(net * bps / (10,000 - bps))`. `effectiveCanonicalFees` reports the
+deployment-configured native LP fee and the separate input/output hook rates;
+the checked-in Robinhood defaults are 3,000 native-fee pips and 50 hook-fee
+basis points on each leg. `splitSwapFee` carves the fixed 5% creator share first,
+then applies the pool-class allocation among protocol-owned liquidity,
+basket-stakers where applicable, global Statics stakers, and treasury. An
+unavailable basket-staker share routes to protocol-owned liquidity, an
+unavailable Statics-staker share routes to treasury, the creator share never
+falls back, and treasury absorbs rounding dust. Matched locked liquidity is
+added as hook-owned full-range liquidity during the swap.
 
 Genesis builders activate tiers by paying the cumulative configured STATICS
 cost — forwarded in full to the treasury, never burned — link one activated
@@ -294,10 +294,9 @@ the caller receives the configured tip from the accrued partner amount.
 rounding. `quoteBorrowAndProvideLiquidity` combines those range amounts with
 the ordinary Statics loan and mint calculations, including the origination-fee
 burn that occurs before mint quoting. Its returned pool caps can be passed to
-`buildBorrowAndProvideLiquidityCall` or, for full-range PositionNFT custody and
-next-block LP reward activation, `buildBorrowAndStakeLiquidityCall`. Re-read
-the pool price, basket supply, and onchain quotes immediately before simulation
-and submission.
+`buildBorrowAndProvideLiquidityCall`, which sends each minted PositionManager
+NFT and refunds to the selected recipient. Re-read the pool price, basket
+supply, and onchain quotes immediately before simulation and submission.
 
 `quoteBorrow` returns the debt and creator-configured recovery-penalty shares
 as well as the collateral and principal vector. `quoteRecovery` mirrors the
@@ -307,17 +306,15 @@ protocol route. Onchain quotes remain authoritative.
 
 User-selected LP positions are ordinary PositionManager NFTs created by the
 installed manager. The generic manager validates their exact PoolKey against
-the Diamond's protocol-pool registry. Their position state can be read from
-PositionManager and StateView; both pool classes currently have zero native LP
-fee.
-Qualifying full-range NFTs can be staked into the Diamond with the exported
-builders, activated in the next block, increased in place, claimed, and
-unstaked without a cooldown. `borrowAndProvideLiquidity` origin is not required.
-`borrowAndStakeLiquidity` instead creates those full-range positions directly
-in Diamond custody under the borrowing PositionNFT; borrowed collateral keeps
-earning its separate basket rewards.
+the Diamond's protocol-pool registry and mints directly to the selected
+recipient. Their position state and native v4 LP fees can be read from
+PositionManager and StateView. The Diamond does not custody user LP NFTs,
+maintain a separate LP reward ledger, or expose a manager-controlled increase
+path.
 Hook-owned permanent liquidity is observed through `lockedLiquidity` and
 `pendingPermanentLiquidity`; it has no protocol PositionManager token ID.
+Native fees earned by that hook-owned position route exclusively to treasury
+and never re-enter compounding.
 User v4 NFTs are discovered from PositionManager `Transfer` and manager
 `UserPositionMinted` events. They belong to the selected LP recipient and
 remain independent of PositionNFT transfers, repayment, extension, and
