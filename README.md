@@ -204,8 +204,9 @@ basket's `flashFeeBps`.
 The package exports the Diamond liquidity and global-reward ABI plus hook,
 manager, PositionManager, and StateView fragments.
 `buildCreateBasketTransaction` requires one semantic
-constituent-per-BasketToken square-root price, paired-asset amount, and measured
-complete input cap per constituent, plus a launch deadline. Prices are ratios of
+constituent-per-BasketToken square-root price, creator-selected static native LP
+fee, tick spacing, paired-asset amount, and measured complete input cap per
+constituent, plus a launch deadline. Prices are ratios of
 raw smallest token units, not decimal-normalized display units. Use
 `encodeSqrtPriceAssetPerBasketX96(assetAmountRaw, basketAmountRaw)` to construct
 them. The creation transaction registers, initializes, backs, and
@@ -217,15 +218,16 @@ When `poolCreationFee()` is nonzero, anyone can permissionlessly create an
 unrelated protocol pool between any two compatible ERC-20s with
 `buildCreatePoolTransaction` by paying that exact fee. A zero fee disables
 permissionless creation and permits only the Diamond owner to create. Assemble
-the `CreatePoolParams`
+the `CreatePoolParams` with a static native `lpFee` from 0 through 999,999 pips
+and a `tickSpacing` from 1 through 32,767
 by sorting the pair with `sortPoolCurrencies` and encoding the raw
 token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
 to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
 `quoteProtocolPool` (or `buildQuotePoolCall`) before submission to recover the
 canonical `poolId` and the normalized `sqrtPriceX96`. When creation requires an
 authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
-EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `1`, the
-chain id, and the Diamond as `verifyingContract`, over the normalized
+EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `2`, the
+chain id, and the Diamond as `verifyingContract`, over the PoolId and normalized
 `sqrtPriceX96` — and `computeCreatePoolAuthorizationDigest` reproduces the exact
 digest the Diamond verifies. Read `quotePool(params).creationFee` immediately
 before calling `buildCreatePoolTransaction(params, creationFee, creatorAuthorization)`;
@@ -239,17 +241,20 @@ grows protocol-owned liquidity from subsequent swap activity.
 `protocolPool(poolId)` normalizes basket canonical and permissionlessly created
 protocol pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
 and `totalCreatorRevenue` cover discovery and revenue reads. Fee administration
-uses `buildSetProtocolPoolFeeRateCall`, `buildSetBasketFeeAllocationCall`, and
-`buildSetGeneralFeeAllocationCall`; the PoolId fee builders work for either
-class. Pool creators claim their accrued 5% revenue share with
+uses `buildSetDefaultProtocolPoolFeeRateCall`,
+`buildSetProtocolPoolFeeRateCall`, `buildClearProtocolPoolFeeRateCall`,
+`buildSetBasketFeeAllocationCall`, and `buildSetGeneralFeeAllocationCall`.
+The 25-BPS-per-side global default applies immediately to every non-overridden
+pool; the PoolId override builders work for either class. Pool creators claim
+their accrued 5% revenue share with
 `buildClaimCreatorRevenueCall`, and `buildDecommissionGeneralPoolCall` performs
 the irreversible treasury recovery of a non-basket pool without touching user
 LP NFTs.
 
-Canonical pools are usable immediately after atomic basket launch. Governance
-uses `buildSetCanonicalPoolFeeRateCall` and `buildClearCanonicalPoolFeeRateCall`
-for PoolId-local rates. Basket fee allocation remains a separate global
-configuration and is never supplied to a canonical-pool rate call.
+Canonical pools are usable immediately after atomic basket launch. Creators do
+not configure hook fees during basket or general-pool creation. Basket and
+general fee allocation remain separate global governance profiles and are never
+supplied to a creation call or PoolId rate override.
 Reward and treasury distribution,
 retirement settlement, and post-`ExitOnly` unwind retain their permissionless
 execution paths.
