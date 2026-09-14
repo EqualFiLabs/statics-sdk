@@ -2079,6 +2079,8 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
       .toBe(true);
+    expect(staticsSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "permanentLiquidityMath"))
+      .toBe(true);
     expect(() => buildSetCanonicalPoolFeeRateCall(7n, assetA, 101n, 100n))
       .toThrow("combined pool fee rate exceeds 200 BPS");
   });

@@ -1585,6 +1585,7 @@ export const staticsSwapFeeHookAbi = parseAbi([
   "function staticsDiamond() view returns (address)",
   "function poolManager() view returns (address)",
   "function nativeLpFee() view returns (uint24)",
+  "function permanentLiquidityMath() view returns (address)",
   "function defaultFeeRate() view returns (uint16 inputFeeBps,uint16 outputFeeBps)",
   "function setDefaultFeeRate(uint16 inputFeeBps,uint16 outputFeeBps)",
   "function setPoolFeeRate(bytes32 poolId,uint16 inputFeeBps,uint16 outputFeeBps)",
