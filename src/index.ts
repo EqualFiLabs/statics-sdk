@@ -692,9 +692,24 @@ export type RecoveryQuote = {
 
 export type EffectiveCanonicalFees = {
   lpFeePips: bigint;
-  lpFeeBps: bigint;
   inputFeeBps: bigint;
   outputFeeBps: bigint;
+};
+
+export type PermanentLiquidityFeeDistribution = {
+  basketStaker: bigint;
+  staticsStaker: bigint;
+  creator: bigint;
+  treasury: bigint;
+};
+
+export type PermanentLiquidityRelease = {
+  principal0: bigint;
+  principal1: bigint;
+  pendingPol0: bigint;
+  pendingPol1: bigint;
+  distribution0: PermanentLiquidityFeeDistribution;
+  distribution1: PermanentLiquidityFeeDistribution;
 };
 
 export type LiquidityParams = {
@@ -900,12 +915,11 @@ export function effectiveCanonicalFees(
   inputFeeBps: bigint,
   outputFeeBps: bigint,
 ): EffectiveCanonicalFees {
-  if (lpFeePips < 0n || lpFeePips % 100n !== 0n) throw new Error("LP fee must convert exactly to bps");
+  if (lpFeePips < 0n || lpFeePips > 999_999n) throw new Error("native LP fee outside protocol bounds");
   if (inputFeeBps < 0n || outputFeeBps < 0n || inputFeeBps + outputFeeBps > 200n) {
     throw new Error("invalid hook fees");
   }
-  const lpFeeBps = lpFeePips / 100n;
-  return { lpFeePips, lpFeeBps, inputFeeBps, outputFeeBps };
+  return { lpFeePips, inputFeeBps, outputFeeBps };
 }
 
 export function getSqrtPriceAtTick(tick: number): bigint {
@@ -1425,6 +1439,8 @@ export const staticsAbi = parseAbi([
   "function setGeneralFeeAllocation((uint16 polShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) allocation)",
   "function decommissionGeneralPool(bytes32 poolId) returns (uint256 amount0,uint256 amount1)",
   "function replaceLiquidityManager(address newManager)",
+  "function setPermanentLiquidityHarvester(address newHarvester)",
+  "function harvestPermanentLiquidityFees(bytes32 poolId) returns (uint256 amount0,uint256 amount1)",
   "function protocolPool(bytes32 poolId) view returns ((bytes32 poolId,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,uint8 kind,bool decommissioned,uint256 basketId,address basketAsset,address creator,uint128 permanentLiquidity) pool)",
   "function isProtocolPool(bytes32 poolId) view returns (bool registered)",
   "function poolCreationFee() view returns (uint256 amount)",
@@ -1433,6 +1449,7 @@ export const staticsAbi = parseAbi([
   "function generalFeeAllocation() view returns ((uint16 polShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) allocation)",
   "function protocolPoolFeeRate(bytes32 poolId) view returns ((uint16 inputFeeBps,uint16 outputFeeBps) feeRate)",
   "function protocolPoolCreator(bytes32 poolId) view returns (address creator)",
+  "function permanentLiquidityHarvester() view returns (address harvester)",
   "function routeProtocolSwapFees(bytes32 poolId,address asset,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution)",
   "function claimCreatorRevenue(address asset,address receiver,uint256 minReceived) returns (uint256 amount,uint256 received)",
   "function creatorRevenue(address creator,address asset) view returns (uint256 amount)",
@@ -1514,6 +1531,8 @@ export const staticsAbi = parseAbi([
   "event BasketFeeAllocationSet(uint16 polShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
   "event GeneralFeeAllocationSet(uint16 polShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
   "event GeneralPoolDecommissioned(bytes32 indexed poolId,address indexed currency0,address indexed currency1,uint256 amount0,uint256 amount1)",
+  "event PermanentLiquidityHarvesterSet(address indexed previousHarvester,address indexed newHarvester)",
+  "event PermanentLiquidityFeesHarvested(bytes32 indexed poolId,address indexed harvester,uint256 amount0,uint256 amount1)",
   "event CreatorRevenueAccrued(bytes32 indexed poolId,address indexed creator,address indexed asset,uint256 amount)",
   "event CreatorRevenueClaimed(address indexed creator,address indexed asset,address indexed receiver,uint256 amount,uint256 received)",
   "event LiquidityManagerReplaced(address indexed oldManager,address indexed newManager)",
@@ -1562,9 +1581,11 @@ export const staticsMorphoErrorAbi = parseAbi([
 ]);
 
 export const staticsSwapFeeHookAbi = parseAbi([
+  "function MAX_NATIVE_LP_FEE_PIPS() view returns (uint24)",
   "function staticsDiamond() view returns (address)",
   "function poolManager() view returns (address)",
   "function nativeLpFee() view returns (uint24)",
+  "function permanentLiquidityMath() view returns (address)",
   "function defaultFeeRate() view returns (uint16 inputFeeBps,uint16 outputFeeBps)",
   "function setDefaultFeeRate(uint16 inputFeeBps,uint16 outputFeeBps)",
   "function setPoolFeeRate(bytes32 poolId,uint16 inputFeeBps,uint16 outputFeeBps)",
@@ -1579,15 +1600,19 @@ export const staticsSwapFeeHookAbi = parseAbi([
   "function poolDecommissioned(bytes32 poolId) view returns (bool decommissioned)",
   "function poolRegistration(bytes32 poolId) view returns ((address currency0,address currency1,uint8 kind,address creator,bool registered) registration)",
   "function pendingPermanentLiquidity(bytes32 poolId,address currency) view returns (uint256 amount)",
+  "function pendingFeeDistribution(bytes32 poolId,address currency) view returns ((uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution)",
+  "function claimLiability(address currency) view returns (uint256 amount)",
   "function lockedLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
   "function seedPermanentLiquidity(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,uint128 liquidity)[] seeds)",
-  "function compoundPermanentLiquidity((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key) returns (uint128 liquidityAdded)",
-  "function releasePermanentLiquidity((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address receiver) returns (uint256 amount0,uint256 amount1)",
+  "function harvestPermanentLiquidityFees((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key) returns ((uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution0,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution1)",
+  "function releasePermanentLiquidity((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address receiver) returns ((uint256 principal0,uint256 principal1,uint256 pendingPol0,uint256 pendingPol1,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution0,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution1) released)",
   "event PoolRegistered(bytes32 indexed poolId,address indexed currency0,address indexed currency1,uint8 kind,address creator)",
   "event SwapLegFeeAccrued(bytes32 indexed poolId,address indexed currency,bool indexed specifiedLeg,uint256 realizedAmount,uint256 chargedAmount,uint256 polAmount,uint256 basketStakerAmount,uint256 staticsStakerAmount,uint256 creatorAmount,uint256 treasuryAmount)",
+  "event PendingFeeDistributionReallocated(bytes32 indexed poolId,address indexed currency,uint256 basketStakerToPol,uint256 staticsStakerToTreasury)",
   "event PermanentLiquidityAdded(bytes32 indexed poolId,uint128 liquidity,uint256 amount0,uint256 amount1,uint256 pending0,uint256 pending1)",
   "event PermanentLiquiditySeeded(bytes32 indexed poolId,uint128 liquidity,uint256 amount0,uint256 amount1)",
-  "event PermanentLiquidityFeesRouted(bytes32 indexed poolId,address indexed currency,uint256 amount)",
+  "event PermanentLiquidityFeesAccrued(bytes32 indexed poolId,address indexed currency,uint256 amount)",
+  "event PermanentLiquidityFeesHarvested(bytes32 indexed poolId,uint256 amount0,uint256 amount1,address indexed receiver)",
   "event PermanentLiquidityReleased(bytes32 indexed poolId,address indexed receiver,uint128 liquidity,uint256 amount0,uint256 amount1)",
   "event PoolDecommissioned(bytes32 indexed poolId)",
   "event PoolFeeRateSet(bytes32 indexed poolId,uint16 inputFeeBps,uint16 outputFeeBps,bool overridden)",
@@ -1692,6 +1717,8 @@ export type StaticsLiquidityEventName =
   | "BasketFeeAllocationSet"
   | "GeneralFeeAllocationSet"
   | "GeneralPoolDecommissioned"
+  | "PermanentLiquidityHarvesterSet"
+  | "PermanentLiquidityFeesHarvested"
   | "CreatorRevenueAccrued"
   | "CreatorRevenueClaimed"
   | "LiquidityManagerReplaced"
@@ -1752,9 +1779,11 @@ export type StaticsLendingEventArgs<Name extends StaticsLendingEventName> =
 export type StaticsHookEventName =
   | "PoolRegistered"
   | "SwapLegFeeAccrued"
+  | "PendingFeeDistributionReallocated"
   | "PermanentLiquidityAdded"
   | "PermanentLiquiditySeeded"
-  | "PermanentLiquidityFeesRouted"
+  | "PermanentLiquidityFeesAccrued"
+  | "PermanentLiquidityFeesHarvested"
   | "PermanentLiquidityReleased"
   | "PoolDecommissioned"
   | "PoolFeeRateSet"
@@ -1843,6 +1872,8 @@ export const staticsProtocolPoolErrorAbi = parseAbi([
   "error InvalidLiquidityManager(address manager)",
   "error LiquidityManagerBindingMismatch(address manager,address expected,address actual)",
   "error LiquidityManagerUnchanged(address manager)",
+  "error InvalidPermanentLiquidityHarvester(address harvester)",
+  "error OnlyPermanentLiquidityHarvester(address caller,address expected)",
   "error LiquidityManagerApprovalMismatch(address manager,bool expected)",
   "error OnlySwapFeeHook(address caller,address expected)",
   "error InvalidRewardAsset(bytes32 poolId,address asset)",
@@ -3058,7 +3089,7 @@ export const MIN_SQRT_PRICE = 4_295_128_739n;
 export const MAX_SQRT_PRICE = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n;
 
 /// @dev Canonical Statics protocol-pool policy bounds, mirroring `LibProtocolPoolFee`.
-export const MAX_NATIVE_LP_FEE_PIPS = 1_000_000;
+export const MAX_NATIVE_LP_FEE_PIPS = 999_999;
 export const MIN_TICK_SPACING = 1;
 export const MAX_TICK_SPACING = 32_767;
 export const MAX_COMBINED_FEE_BPS = 200n;
@@ -3388,6 +3419,22 @@ export function buildDecommissionGeneralPoolCall(poolId: Hex): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
     functionName: "decommissionGeneralPool",
+    args: [poolId],
+  });
+}
+
+export function buildSetPermanentLiquidityHarvesterCall(newHarvester: Address): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "setPermanentLiquidityHarvester",
+    args: [newHarvester],
+  });
+}
+
+export function buildHarvestPermanentLiquidityFeesCall(poolId: Hex): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "harvestPermanentLiquidityFees",
     args: [poolId],
   });
 }
