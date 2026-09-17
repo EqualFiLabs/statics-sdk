@@ -269,7 +269,9 @@ nonce, deadline, and agreement hash. Later economics changes use
 `buildPermissionedPoolTermsTypedData` and
 `buildApplyPermissionedPoolTermsCall`; creator authorization and timelocked
 governance execution are both required. Reward-restriction and trusted-periphery
-builders expose the corresponding Phase 1 governance calls.
+builders expose the corresponding Phase 1 governance calls. When both pool
+currencies are reward-restricted, the hook overrides any configured allocation
+with 80% creator and 20% treasury and creates no staker-reward liability.
 
 Canonical single-pool browser swaps use `buildQuoteV4ExactInputSingleCall`
 against Robinhood's v4 Quoter and `buildV4ExactInputSingleSwap` against its
