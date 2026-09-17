@@ -104,8 +104,24 @@ import {
   buildSetPermanentLiquidityHarvesterCall,
   buildHarvestPermanentLiquidityFeesCall,
   buildCreatePoolAuthorizationTypedData,
+  buildPermissionedPoolCreationTypedData,
+  buildPermissionedPoolTermsTypedData,
   computeCreatePoolAuthorizationDigest,
+  computePermissionedEconomicsHash,
+  computePermissionedPoolCreationDigest,
+  computePermissionedPoolTermsDigest,
   quoteProtocolPool,
+  quotePermissionedProtocolPool,
+  defaultPermissionedGeneralEconomics,
+  buildQuotePermissionedPoolCall,
+  buildCreatePermissionedPoolCall,
+  buildInvalidatePermissionedAuthorizationNonceCall,
+  buildApplyPermissionedPoolTermsCall,
+  buildInvalidatePermissionedConfigurationNonceCall,
+  buildDecommissionPermissionedPoolCall,
+  buildSetPermissionedTrustedPeripheryCall,
+  buildAddRewardRestrictionCall,
+  buildRemoveRewardRestrictionCall,
   sortPoolCurrencies,
   normalizeSqrtPriceBPerAX96,
   buildProtocolPoolKey,
@@ -201,6 +217,11 @@ import {
   staticsProtocolPoolErrorAbi,
   staticsRewardsErrorAbi,
   staticsSwapFeeHookAbi,
+  staticsPermissionedSwapFeeHookAbi,
+  staticsPermissionedRouterAbi,
+  staticsPermissionedPositionManagerAbi,
+  permissionedPositionClaimsAbi,
+  defaultVenueControllerAbi,
   staticsGenesisAbi,
   staticsGenesisErrorAbi,
   staticsFlashAssetBorrowerAbi,
@@ -652,8 +673,8 @@ describe("Statics static basket quotes", () => {
     })).toEqual({ functionName: "setPermanentLiquidityHarvester", args: [receiver] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildHarvestPermanentLiquidityFeesCall(poolId) }))
       .toEqual({ functionName: "harvestPermanentLiquidityFees", args: [poolId] });
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(assetA, receiver, 5n) }))
-      .toEqual({ functionName: "claimCreatorRevenue", args: [assetA, receiver, 5n] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(poolId, assetA, receiver, 5n) }))
+      .toEqual({ functionName: "claimCreatorRevenue", args: [poolId, assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
       .toBe("replaceLiquidityManager");
 
@@ -672,6 +693,123 @@ describe("Statics static basket quotes", () => {
     });
     expect(decodeFunctionData({ abi: staticsLiquidityManagerAbi, data: managerData }).functionName)
       .toBe("mintUserPosition");
+  });
+
+  it("quotes and encodes permissioned pool creation and SLA terms", () => {
+    const diamond = "0x0000000000000000000000000000000000000006";
+    const hook = "0x0000000000000000000000000000000000000007";
+    const controller = "0x0000000000000000000000000000000000000008";
+    const agreementHash = keccak256("0x1234");
+    const economics = defaultPermissionedGeneralEconomics(100n, 1);
+    const params = {
+      tokenA: assetA,
+      tokenB: assetB,
+      lpFee: 3_000,
+      tickSpacing: 10,
+      sqrtPriceBPerAX96: Q96,
+      creator: receiver,
+      controller,
+      economics,
+      authorizationNonce: 9n,
+      deadline: 7_200n,
+      agreementHash,
+    };
+    const quote = quotePermissionedProtocolPool(4_663, diamond, hook, params);
+    const economicsHash = computePermissionedEconomicsHash(economics);
+    const creationMessage = {
+      poolId: quote.poolId,
+      sqrtPriceX96: quote.sqrtPriceX96,
+      creator: receiver,
+      controller,
+      economicsHash,
+      authorizationNonce: 9n,
+      deadline: 7_200n,
+      agreementHash,
+    };
+    expect(hashTypedData(buildPermissionedPoolCreationTypedData(4_663, diamond, creationMessage)))
+      .toBe(computePermissionedPoolCreationDigest(4_663, diamond, creationMessage));
+    expect(quote.authorizationDigest).toBe(computePermissionedPoolCreationDigest(4_663, diamond, creationMessage));
+    expect(quote.key.hooks).toBe(hook);
+    expect(ProtocolPoolKind.PermissionedGeneral).toBe(3);
+
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildQuotePermissionedPoolCall(params) }).functionName)
+      .toBe("quotePermissionedPool");
+    const create = decodeFunctionData({
+      abi: staticsAbi,
+      data: buildCreatePermissionedPoolCall(params, "0xabcd"),
+    });
+    expect(create.functionName).toBe("createPermissionedPool");
+    expect(create.args?.[1]).toBe("0xabcd");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildInvalidatePermissionedAuthorizationNonceCall(9n),
+    })).toEqual({ functionName: "invalidatePermissionedAuthorizationNonce", args: [9n] });
+
+    const changed = {
+      ...defaultPermissionedGeneralEconomics(250n),
+      allocation: {
+        creatorShareBps: 7_000n,
+        treasuryShareBps: 1_000n,
+        staticsStakerShareBps: 2_000n,
+        basketStakerShareBps: 0n,
+      },
+    };
+    const termsMessage = {
+      poolId: quote.poolId,
+      economicsHash: computePermissionedEconomicsHash(changed),
+      nonce: 0n,
+      deadline: 8_000n,
+      agreementHash,
+    };
+    expect(hashTypedData(buildPermissionedPoolTermsTypedData(4_663, diamond, termsMessage)))
+      .toBe(computePermissionedPoolTermsDigest(4_663, diamond, termsMessage));
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildApplyPermissionedPoolTermsCall(
+        quote.poolId,
+        changed,
+        0n,
+        8_000n,
+        agreementHash,
+        "0xabcd",
+      ),
+    }).functionName).toBe("applyPermissionedPoolTerms");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildInvalidatePermissionedConfigurationNonceCall(quote.poolId, 0n),
+    }).functionName).toBe("invalidatePermissionedConfigurationNonce");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildDecommissionPermissionedPoolCall(quote.poolId),
+    }).functionName).toBe("decommissionPermissionedPool");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildSetPermissionedTrustedPeripheryCall(hook, true),
+    })).toEqual({ functionName: "setPermissionedTrustedPeriphery", args: [hook, true] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildAddRewardRestrictionCall(assetA) }))
+      .toEqual({ functionName: "addRewardRestriction", args: [assetA] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildRemoveRewardRestrictionCall(assetA) }))
+      .toEqual({ functionName: "removeRewardRestriction", args: [assetA] });
+
+    expect(() => computePermissionedEconomicsHash({
+      ...economics,
+      allocation: { ...economics.allocation, basketStakerShareBps: 1n },
+    })).toThrow("permissioned fee allocation must sum to 10000 BPS");
+    expect(() => defaultPermissionedGeneralEconomics(100n, 4))
+      .toThrow("additionalRewardRestrictedMask exceeds two currency bits");
+  });
+
+  it("exposes the permissioned hook, router, position and claims bindings", () => {
+    expect(staticsPermissionedSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "poolEconomics"))
+      .toBe(true);
+    expect(staticsPermissionedRouterAbi.some((item) => item.type === "function" && item.name === "swapExactInputSingle"))
+      .toBe(true);
+    expect(staticsPermissionedPositionManagerAbi.some((item) => item.type === "function" && item.name === "forceUnwind"))
+      .toBe(true);
+    expect(permissionedPositionClaimsAbi.some((item) => item.type === "function" && item.name === "creditOf"))
+      .toBe(true);
+    expect(defaultVenueControllerAbi.some((item) => item.type === "function" && item.name === "setPermissions"))
+      .toBe(true);
   });
 
   it("decodes permissionless protocol pool errors", () => {
@@ -859,13 +997,14 @@ describe("Statics static basket quotes", () => {
     expect(accrued.args).toMatchObject({ poolId, creator: receiver, asset: assetA, amount: 500n });
 
     const claimed = encodeEventArgs("CreatorRevenueClaimed", {
+      poolId,
       creator: receiver,
       asset: assetA,
       receiver,
       amount: 500n,
       received: 500n,
     });
-    expect(claimed.args).toMatchObject({ creator: receiver, asset: assetA, amount: 500n, received: 500n });
+    expect(claimed.args).toMatchObject({ poolId, creator: receiver, asset: assetA, amount: 500n, received: 500n });
   });
 
   it("matches Solidity tick and range amount vectors", () => {
@@ -2085,8 +2224,11 @@ describe("Statics unified calldata", () => {
     expect(decodeFunctionData({ abi: staticsAbi, data: buildSetGenesisRewardShareBpsCall(5_000) }))
       .toEqual({ functionName: "setGenesisRewardShareBps", args: [5_000] });
     expect(() => buildSetGenesisRewardShareBpsCall(10_001)).toThrow("0 through 10000 BPS");
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(assetA, receiver, 5n) }))
-      .toEqual({ functionName: "claimCreatorRevenue", args: [assetA, receiver, 5n] });
+    const revenuePoolId = `0x${"33".repeat(32)}` as const;
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildClaimCreatorRevenueCall(revenuePoolId, assetA, receiver, 5n),
+    })).toEqual({ functionName: "claimCreatorRevenue", args: [revenuePoolId, assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildDistributePartnerRevenueCall(receiver, assetA) }))
       .toEqual({ functionName: "distributePartnerRevenue", args: [receiver, assetA] });
     expect(staticsGenesisAbi.some((entry) => entry.type === "event" && entry.name === "ConsecutiveTransfer"))
@@ -2095,8 +2237,8 @@ describe("Statics unified calldata", () => {
       .toBe(true);
     expect(decodeErrorResult({ abi: staticsGenesisErrorAbi, data: encodeErrorResult({ abi: staticsGenesisErrorAbi, errorName: "GenesisLinkMismatch", args: [7n, 9n] }) }).errorName)
       .toBe("GenesisLinkMismatch");
-    expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoRevenue", args: [receiver, assetA] }) }).errorName)
-      .toBe("NoRevenue");
+    expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data: encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "NoCreatorRevenue", args: [receiver, assetA] }) }).errorName)
+      .toBe("NoCreatorRevenue");
   });
 
   it("matches the current Statics Morpho interface surface", () => {

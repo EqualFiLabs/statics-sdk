@@ -238,16 +238,17 @@ pool creation requires no token approvals, no initial funding, and no mandatory
 permanent-liquidity seed: a general pool initializes with zero liquidity and
 grows protocol-owned liquidity from subsequent swap activity.
 
-`protocolPool(poolId)` normalizes basket canonical and permissionlessly created
-protocol pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
+`protocolPool(poolId)` normalizes basket canonical, permissionless general, and
+permissioned general pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
 and `totalCreatorRevenue` cover discovery and revenue reads. Fee administration
 uses `buildSetDefaultProtocolPoolFeeRateCall`,
 `buildSetProtocolPoolFeeRateCall`, `buildClearProtocolPoolFeeRateCall`,
 `buildSetBasketFeeAllocationCall`, and `buildSetGeneralFeeAllocationCall`.
 The 25-BPS-per-side global default applies immediately to every non-overridden
-pool; the PoolId override builders work for either class. Pool creators claim
-their accrued 5% revenue share with
-`buildClaimCreatorRevenueCall`, and `buildDecommissionGeneralPoolCall` performs
+public pool; the PoolId override builders work for basket and permissionless
+general pools. Pool creators claim PoolId-local revenue with
+`buildClaimCreatorRevenueCall(poolId, asset, receiver, minReceived)`, and
+`buildDecommissionGeneralPoolCall` performs
 the irreversible treasury recovery of a non-basket pool without touching user
 LP NFTs.
 
@@ -258,6 +259,17 @@ supplied to a creation call or PoolId rate override.
 Reward and treasury distribution,
 retirement settlement, and post-`ExitOnly` unwind retain their permissionless
 execution paths.
+
+Permissioned general pools use the separate permissioned hook and periphery.
+`defaultPermissionedGeneralEconomics` constructs the 80% creator, 10% treasury,
+and 10% STATICS-staker allocation. `quotePermissionedProtocolPool` plus
+`buildPermissionedPoolCreationTypedData` produces the creator authorization for
+the exact controller, native LP fee, venue fee, allocation, restriction mask,
+nonce, deadline, and agreement hash. Later economics changes use
+`buildPermissionedPoolTermsTypedData` and
+`buildApplyPermissionedPoolTermsCall`; creator authorization and timelocked
+governance execution are both required. Reward-restriction and trusted-periphery
+builders expose the corresponding Phase 1 governance calls.
 
 Canonical single-pool browser swaps use `buildQuoteV4ExactInputSingleCall`
 against Robinhood's v4 Quoter and `buildV4ExactInputSingleSwap` against its

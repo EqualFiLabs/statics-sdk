@@ -391,6 +391,7 @@ export const ProtocolPoolKind = {
   None: 0,
   BasketCanonical: 1,
   General: 2,
+  PermissionedGeneral: 3,
 } as const;
 
 export type ProtocolPoolKind = typeof ProtocolPoolKind[keyof typeof ProtocolPoolKind];
@@ -511,6 +512,40 @@ export type GeneralPoolQuote = {
   poolId: Hex;
   sqrtPriceX96: bigint;
   creationFee: bigint;
+  authorizationDigest: Hex;
+};
+
+export type PermissionedFeeAllocation = {
+  creatorShareBps: bigint;
+  treasuryShareBps: bigint;
+  staticsStakerShareBps: bigint;
+  basketStakerShareBps: bigint;
+};
+
+export type PermissionedPoolEconomics = {
+  venueFeeBps: bigint;
+  additionalRewardRestrictedMask: number;
+  allocation: PermissionedFeeAllocation;
+};
+
+export type CreatePermissionedPoolParams = {
+  tokenA: Address;
+  tokenB: Address;
+  lpFee: number;
+  tickSpacing: number;
+  sqrtPriceBPerAX96: bigint;
+  creator: Address;
+  controller: Address;
+  economics: PermissionedPoolEconomics;
+  authorizationNonce: bigint;
+  deadline: bigint;
+  agreementHash: Hex;
+};
+
+export type PermissionedPoolQuote = {
+  key: V4PoolKey;
+  poolId: Hex;
+  sqrtPriceX96: bigint;
   authorizationDigest: Hex;
 };
 
@@ -1430,6 +1465,8 @@ export const staticsAbi = parseAbi([
   "function peggedProtocolRevenue(uint256 profileId,address token) view returns (uint256 amount)",
   "function claimPeggedProtocolRevenue(uint256 profileId,uint256 amount,address receiver) returns (uint256 spent,uint256 received)",
   "function installCanonicalPoolIntegration(address poolManager,address hook)",
+  "function installPermissionedPoolIntegration(address hook,address router,address positionManager,address quoter)",
+  "function permissionedLiquidityIntegration() view returns (address hook,address router,address positionManager,address quoter,bool installed)",
   "function canonicalPool(uint256 basketId,address asset) view returns ((bytes32 poolId,address basketToken,address asset,address currency0,address currency1,address hook,uint24 lpFee,int24 tickSpacing,int24 spotTick) pool)",
   "function quotePool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,uint256 nonce,uint256 deadline) params) view returns (((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,bytes32 poolId,uint160 sqrtPriceX96,uint256 creationFee,bytes32 authorizationDigest) quote)",
   "function createPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,uint256 nonce,uint256 deadline) params,bytes creatorAuthorization) payable returns (bytes32 poolId)",
@@ -1455,10 +1492,24 @@ export const staticsAbi = parseAbi([
   "function protocolPoolCreator(bytes32 poolId) view returns (address creator)",
   "function permanentLiquidityHarvester() view returns (address harvester)",
   "function routeProtocolSwapFees(bytes32 poolId,address asset,(uint256 basketStaker,uint256 staticsStaker,uint256 creator,uint256 treasury) distribution)",
-  "function claimCreatorRevenue(address asset,address receiver,uint256 minReceived) returns (uint256 amount,uint256 received)",
-  "function creatorRevenue(address creator,address asset) view returns (uint256 amount)",
+  "function claimCreatorRevenue(bytes32 poolId,address asset,address receiver,uint256 minReceived) returns (uint256 amount,uint256 received)",
+  "function creatorRevenue(bytes32 poolId,address asset) view returns (uint256 amount)",
   "function totalCreatorRevenue(address asset) view returns (uint256 amount)",
   "function canAccrueBasketRewards(bytes32 poolId) view returns (bool eligible)",
+  "function addRewardRestriction(address asset)",
+  "function removeRewardRestriction(address asset)",
+  "function rewardRestricted(address asset) view returns (bool restricted)",
+  "function quotePermissionedPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,address controller,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 authorizationNonce,uint256 deadline,bytes32 agreementHash) params) view returns (((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,bytes32 poolId,uint160 sqrtPriceX96,bytes32 authorizationDigest) quote)",
+  "function createPermissionedPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,address controller,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 authorizationNonce,uint256 deadline,bytes32 agreementHash) params,bytes creatorAuthorization) returns (bytes32 poolId)",
+  "function invalidatePermissionedAuthorizationNonce(uint256 nonce)",
+  "function applyPermissionedPoolTerms(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 nonce,uint256 deadline,bytes32 agreementHash,bytes creatorAuthorization)",
+  "function invalidatePermissionedConfigurationNonce(bytes32 poolId,uint256 nonce)",
+  "function decommissionPermissionedPool(bytes32 poolId)",
+  "function setPermissionedTrustedPeriphery(address periphery,bool trusted)",
+  "function permissionedPool(bytes32 poolId) view returns ((bytes32 poolId,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address creator,address controller,bool decommissioned,uint256 configurationNonce,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics) pool)",
+  "function isPermissionedPool(bytes32 poolId) view returns (bool registered)",
+  "function isPermissionedAuthorizationNonceUsed(address creator,uint256 nonce) view returns (bool used)",
+  "function permissionedTermsDigest(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 nonce,uint256 deadline,bytes32 agreementHash) view returns (bytes32 digest)",
   "function liquidityIntegration() view returns (address poolManager,address hook,bool installed)",
   "function installLiquidityManager(address manager)",
   "function liquidityManager() view returns (address manager,bool installed)",
@@ -1535,7 +1586,16 @@ export const staticsAbi = parseAbi([
   "event PermanentLiquidityHarvesterSet(address indexed previousHarvester,address indexed newHarvester)",
   "event PermanentLiquidityFeesHarvested(bytes32 indexed poolId,address indexed harvester,uint256 amount0,uint256 amount1)",
   "event CreatorRevenueAccrued(bytes32 indexed poolId,address indexed creator,address indexed asset,uint256 amount)",
-  "event CreatorRevenueClaimed(address indexed creator,address indexed asset,address indexed receiver,uint256 amount,uint256 received)",
+  "event CreatorRevenueClaimed(bytes32 indexed poolId,address indexed creator,address indexed asset,address receiver,uint256 amount,uint256 received)",
+  "event RewardRestrictionAdded(address indexed asset,address indexed caller)",
+  "event RewardRestrictionRemoved(address indexed asset)",
+  "event PermissionedLiquidityIntegrationInstalled(address indexed hook,address indexed router,address indexed positionManager,address quoter)",
+  "event PermissionedPoolCreated(bytes32 indexed poolId,address indexed creator,address indexed controller,address currency0,address currency1,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceX96,int24 tick,bytes32 agreementHash)",
+  "event PermissionedAuthorizationNonceInvalidated(address indexed creator,uint256 indexed nonce)",
+  "event PermissionedConfigurationNonceInvalidated(bytes32 indexed poolId,uint256 oldNonce,uint256 newNonce)",
+  "event PermissionedPoolTermsChanged(bytes32 indexed poolId,uint256 indexed nonce,bytes32 indexed agreementHash,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) oldEconomics,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) newEconomics)",
+  "event PermissionedPoolDecommissioned(bytes32 indexed poolId)",
+  "event PermissionedTrustedPeripherySet(address indexed periphery,bool trusted)",
   "event LiquidityManagerReplaced(address indexed oldManager,address indexed newManager)",
   "event LiquidityManagerInstalled(address indexed manager)",
   "event CanonicalPoolSyncedToManager(uint256 indexed basketId,address indexed asset,bytes32 indexed poolId,address manager)",
@@ -1615,6 +1675,64 @@ export const staticsSwapFeeHookAbi = parseAbi([
   "event DefaultFeeRateSet(uint16 inputFeeBps,uint16 outputFeeBps)",
   "event BasketFeeAllocationSet(uint16 polShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
   "event GeneralFeeAllocationSet(uint16 polShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps)",
+]);
+
+export const staticsPermissionedSwapFeeHookAbi = parseAbi([
+  "function staticsDiamond() view returns (address)",
+  "function poolManager() view returns (address)",
+  "function registerPool((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address controller,address creator,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics) returns (bytes32 poolId)",
+  "function setPoolEconomics(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics)",
+  "function decommissionPool((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key)",
+  "function setTrustedPeriphery(address periphery,bool trusted)",
+  "function poolRegistration(bytes32 poolId) view returns ((address currency0,address currency1,address controller,address creator,bool registered,bool decommissioned) registration)",
+  "function poolEconomics(bytes32 poolId) view returns ((uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics)",
+  "function trustedPeriphery(address periphery) view returns (bool trusted)",
+  "event PermissionedPoolRegistered(bytes32 indexed poolId,address indexed currency0,address indexed currency1,address controller,address creator,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics)",
+  "event PermissionedPoolEconomicsSet(bytes32 indexed poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) oldEconomics,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) newEconomics)",
+  "event PermissionedVenueFeeCharged(bytes32 indexed poolId,address indexed outputCurrency,uint256 grossOutput,uint256 chargedAmount,uint256 creatorAmount,uint256 treasuryAmount,uint256 staticsStakerAmount,uint256 basketStakerAmount)",
+  "event PermissionedRewardsNormalized(bytes32 indexed poolId,address indexed restrictedCurrency,address indexed rewardCurrency,uint256 amountIn,uint256 amountOut)",
+]);
+
+export const defaultVenueControllerAbi = parseAbi([
+  "function SWAP_ALLOWED() view returns (uint256)",
+  "function LIQUIDITY_ALLOWED() view returns (uint256)",
+  "function ALL_PERMISSIONS() view returns (uint256)",
+  "function operator() view returns (address)",
+  "function pendingOperator() view returns (address)",
+  "function startOperatorTransfer(address nextOperator)",
+  "function acceptOperator()",
+  "function setPermissions(bytes32 poolId,address[] accounts,uint256[] flags)",
+  "function setAssetStatus(address asset,uint8 status)",
+  "function setPoolStatus(bytes32 poolId,uint8 status)",
+  "function permissions(bytes32 poolId,address account) view returns (uint256 flags)",
+  "function assetStatus(address asset) view returns (uint8 status)",
+  "function poolStatus(bytes32 poolId) view returns (uint8 status)",
+]);
+
+export const staticsPermissionedRouterAbi = parseAbi([
+  "function poolManager() view returns (address)",
+  "function permit2() view returns (address)",
+  "function permissionedHook() view returns (address)",
+  "function swapExactInputSingle(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,bytes hookData) params,uint256 deadline) returns (uint256 amountOut)",
+]);
+
+export const staticsPermissionedPositionManagerAbi = parseAbi([
+  "function poolManager() view returns (address)",
+  "function permit2() view returns (address)",
+  "function permissionedHook() view returns (address)",
+  "function positionClaims() view returns (address)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "function getPositionLiquidity(uint256 tokenId) view returns (uint128 liquidity)",
+  "function modifyLiquidities(bytes unlockData,uint256 deadline) payable",
+  "function forceUnwind(uint256 tokenId,uint128 amount0Min,uint128 amount1Min,bytes hookData)",
+]);
+
+export const permissionedPositionClaimsAbi = parseAbi([
+  "function poolManager() view returns (address)",
+  "function positionManager() view returns (address)",
+  "function permissionedHook() view returns (address)",
+  "function claim(bytes32 poolId,address currency,address receiver,uint256 amount)",
+  "function creditOf(bytes32 poolId,address owner,address currency) view returns (uint256 amount)",
 ]);
 
 export const staticsTokenAbi = parseAbi([
@@ -1971,9 +2089,12 @@ export const staticsGenesisErrorAbi = parseAbi([
 
 export const staticsProtocolRevenueErrorAbi = parseAbi([
   "error InvalidReceiver()",
-  "error NoRevenue(address account,address asset)",
+  "error NoCreatorRevenue(address creator,address asset)",
+  "error OnlyPoolCreator(address caller,address creator)",
+  "error OnlySwapFeeHook(address caller,address expected)",
+  "error GeneralPoolBasketReward(bytes32 poolId,uint256 amount)",
   "error MinimumOutputNotMet(address asset,uint256 actual,uint256 minimum)",
-  "error IncompatibleRevenueAsset(address asset,uint256 expected,uint256 spent,uint256 received)",
+  "error IncompatibleRevenueAsset(address asset,uint256 expected,uint256 actual)",
   "error InvalidPartnerTip(uint16 tipBps)",
   "error InvalidPartnerRecipient(address recipient)",
 ]);
@@ -3067,6 +3188,11 @@ export const CREATOR_SHARE_BPS = 500n;
 /// @dev Statics Protocol Pools EIP-712 domain name and version, matching `ProtocolPoolCreationFacet`.
 export const PROTOCOL_POOLS_DOMAIN_NAME = "Statics Protocol Pools";
 export const PROTOCOL_POOLS_DOMAIN_VERSION = "2";
+export const PERMISSIONED_POOLS_DOMAIN_NAME = "Statics Permissioned Pools";
+export const PERMISSIONED_POOLS_DOMAIN_VERSION = "1";
+export const DEFAULT_PERMISSIONED_CREATOR_SHARE_BPS = 8_000n;
+export const DEFAULT_PERMISSIONED_TREASURY_SHARE_BPS = 1_000n;
+export const DEFAULT_PERMISSIONED_STATICS_STAKER_SHARE_BPS = 1_000n;
 
 function _lowerAddress(value: Address): bigint {
   return BigInt(value.toLowerCase());
@@ -3186,6 +3312,277 @@ function coerceCreatePoolParams(params: CreatePoolParams) {
     nonce: _validateUint256(params.nonce, "nonce"),
     deadline: _validateUint256(params.deadline, "deadline"),
   };
+}
+
+function validatedPermissionedEconomics(economics: PermissionedPoolEconomics) {
+  const venueFeeBps = toUint16(economics.venueFeeBps, "venueFeeBps");
+  if (venueFeeBps > Number(BPS)) throw new Error("venueFeeBps exceeds 10000 BPS");
+  const mask = economics.additionalRewardRestrictedMask;
+  if (!Number.isInteger(mask) || mask < 0 || mask > 3) {
+    throw new Error("additionalRewardRestrictedMask exceeds two currency bits");
+  }
+  const creatorShareBps = toUint16(economics.allocation.creatorShareBps, "creatorShareBps");
+  const treasuryShareBps = toUint16(economics.allocation.treasuryShareBps, "treasuryShareBps");
+  const staticsStakerShareBps = toUint16(
+    economics.allocation.staticsStakerShareBps,
+    "staticsStakerShareBps",
+  );
+  const basketStakerShareBps = toUint16(
+    economics.allocation.basketStakerShareBps,
+    "basketStakerShareBps",
+  );
+  const total = BigInt(creatorShareBps) + BigInt(treasuryShareBps)
+    + BigInt(staticsStakerShareBps) + BigInt(basketStakerShareBps);
+  if (total !== BPS) throw new Error("permissioned fee allocation must sum to 10000 BPS");
+  if (basketStakerShareBps !== 0) throw new Error("permissioned general pools cannot allocate basket rewards");
+  return {
+    venueFeeBps,
+    additionalRewardRestrictedMask: mask,
+    allocation: { creatorShareBps, treasuryShareBps, staticsStakerShareBps, basketStakerShareBps },
+  };
+}
+
+export function defaultPermissionedGeneralEconomics(
+  venueFeeBps: bigint,
+  additionalRewardRestrictedMask = 0,
+): PermissionedPoolEconomics {
+  const economics: PermissionedPoolEconomics = {
+    venueFeeBps,
+    additionalRewardRestrictedMask,
+    allocation: {
+      creatorShareBps: DEFAULT_PERMISSIONED_CREATOR_SHARE_BPS,
+      treasuryShareBps: DEFAULT_PERMISSIONED_TREASURY_SHARE_BPS,
+      staticsStakerShareBps: DEFAULT_PERMISSIONED_STATICS_STAKER_SHARE_BPS,
+      basketStakerShareBps: 0n,
+    },
+  };
+  validatedPermissionedEconomics(economics);
+  return economics;
+}
+
+function coerceCreatePermissionedPoolParams(params: CreatePermissionedPoolParams) {
+  if (params.sqrtPriceBPerAX96 <= 0n || params.sqrtPriceBPerAX96 > ((1n << 160n) - 1n)) {
+    throw new Error("sqrtPriceBPerAX96 exceeds uint160");
+  }
+  return {
+    tokenA: params.tokenA,
+    tokenB: params.tokenB,
+    lpFee: _validateStaticLpFee(params.lpFee),
+    tickSpacing: _validateTickSpacing(params.tickSpacing),
+    sqrtPriceBPerAX96: params.sqrtPriceBPerAX96,
+    creator: params.creator,
+    controller: params.controller,
+    economics: validatedPermissionedEconomics(params.economics),
+    authorizationNonce: _validateUint256(params.authorizationNonce, "authorizationNonce"),
+    deadline: _validateUint256(params.deadline, "deadline"),
+    agreementHash: params.agreementHash,
+  };
+}
+
+export function computePermissionedEconomicsHash(economics: PermissionedPoolEconomics): Hex {
+  const validated = validatedPermissionedEconomics(economics);
+  return keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("uint16,uint8,uint16,uint16,uint16,uint16"),
+      [
+        validated.venueFeeBps,
+        validated.additionalRewardRestrictedMask,
+        validated.allocation.creatorShareBps,
+        validated.allocation.treasuryShareBps,
+        validated.allocation.staticsStakerShareBps,
+        validated.allocation.basketStakerShareBps,
+      ],
+    ),
+  );
+}
+
+function permissionedPoolDomainSeparator(chainId: number, diamond: Address): Hex {
+  const domainTypeHash = keccak256(
+    toHex("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("bytes32,bytes32,bytes32,uint256,address"),
+      [
+        domainTypeHash,
+        keccak256(toHex(PERMISSIONED_POOLS_DOMAIN_NAME)),
+        keccak256(toHex(PERMISSIONED_POOLS_DOMAIN_VERSION)),
+        BigInt(chainId),
+        diamond,
+      ],
+    ),
+  );
+}
+
+export function buildPermissionedPoolCreationTypedData(
+  chainId: number,
+  diamond: Address,
+  message: {
+    poolId: Hex;
+    sqrtPriceX96: bigint;
+    creator: Address;
+    controller: Address;
+    economicsHash: Hex;
+    authorizationNonce: bigint;
+    deadline: bigint;
+    agreementHash: Hex;
+  },
+) {
+  return {
+    domain: {
+      name: PERMISSIONED_POOLS_DOMAIN_NAME,
+      version: PERMISSIONED_POOLS_DOMAIN_VERSION,
+      chainId,
+      verifyingContract: diamond,
+    },
+    types: {
+      CreatePermissionedPool: [
+        { name: "poolId", type: "bytes32" },
+        { name: "sqrtPriceX96", type: "uint160" },
+        { name: "creator", type: "address" },
+        { name: "controller", type: "address" },
+        { name: "economicsHash", type: "bytes32" },
+        { name: "authorizationNonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "agreementHash", type: "bytes32" },
+      ],
+    },
+    primaryType: "CreatePermissionedPool",
+    message: {
+      ...message,
+      authorizationNonce: _validateUint256(message.authorizationNonce, "authorizationNonce"),
+      deadline: _validateUint256(message.deadline, "deadline"),
+    },
+  } as const;
+}
+
+export function computePermissionedPoolCreationDigest(
+  chainId: number,
+  diamond: Address,
+  message: {
+    poolId: Hex;
+    sqrtPriceX96: bigint;
+    creator: Address;
+    controller: Address;
+    economicsHash: Hex;
+    authorizationNonce: bigint;
+    deadline: bigint;
+    agreementHash: Hex;
+  },
+): Hex {
+  const typeHash = keccak256(
+    toHex(
+      "CreatePermissionedPool(bytes32 poolId,uint160 sqrtPriceX96,address creator,address controller,bytes32 economicsHash,uint256 authorizationNonce,uint256 deadline,bytes32 agreementHash)",
+    ),
+  );
+  const structHash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("bytes32,bytes32,uint160,address,address,bytes32,uint256,uint256,bytes32"),
+      [
+        typeHash,
+        message.poolId,
+        message.sqrtPriceX96,
+        message.creator,
+        message.controller,
+        message.economicsHash,
+        _validateUint256(message.authorizationNonce, "authorizationNonce"),
+        _validateUint256(message.deadline, "deadline"),
+        message.agreementHash,
+      ],
+    ),
+  );
+  return keccak256(concatHex(["0x1901", permissionedPoolDomainSeparator(chainId, diamond), structHash]));
+}
+
+export function quotePermissionedProtocolPool(
+  chainId: number,
+  diamond: Address,
+  permissionedHook: Address,
+  params: CreatePermissionedPoolParams,
+): PermissionedPoolQuote {
+  const validated = coerceCreatePermissionedPoolParams(params);
+  const sqrtPriceX96 = normalizeSqrtPriceBPerAX96(params.tokenA, params.tokenB, params.sqrtPriceBPerAX96);
+  const key = buildProtocolPoolKey(params.tokenA, params.tokenB, params.tickSpacing, permissionedHook, params.lpFee);
+  const poolId = computePoolId(key);
+  const authorizationDigest = computePermissionedPoolCreationDigest(chainId, diamond, {
+    poolId,
+    sqrtPriceX96,
+    creator: params.creator,
+    controller: params.controller,
+    economicsHash: computePermissionedEconomicsHash(params.economics),
+    authorizationNonce: validated.authorizationNonce,
+    deadline: validated.deadline,
+    agreementHash: params.agreementHash,
+  });
+  return { key, poolId, sqrtPriceX96, authorizationDigest };
+}
+
+export function buildPermissionedPoolTermsTypedData(
+  chainId: number,
+  diamond: Address,
+  message: {
+    poolId: Hex;
+    economicsHash: Hex;
+    nonce: bigint;
+    deadline: bigint;
+    agreementHash: Hex;
+  },
+) {
+  return {
+    domain: {
+      name: PERMISSIONED_POOLS_DOMAIN_NAME,
+      version: PERMISSIONED_POOLS_DOMAIN_VERSION,
+      chainId,
+      verifyingContract: diamond,
+    },
+    types: {
+      PermissionedPoolTerms: [
+        { name: "poolId", type: "bytes32" },
+        { name: "economicsHash", type: "bytes32" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "agreementHash", type: "bytes32" },
+      ],
+    },
+    primaryType: "PermissionedPoolTerms",
+    message: {
+      ...message,
+      nonce: _validateUint256(message.nonce, "nonce"),
+      deadline: _validateUint256(message.deadline, "deadline"),
+    },
+  } as const;
+}
+
+export function computePermissionedPoolTermsDigest(
+  chainId: number,
+  diamond: Address,
+  message: {
+    poolId: Hex;
+    economicsHash: Hex;
+    nonce: bigint;
+    deadline: bigint;
+    agreementHash: Hex;
+  },
+): Hex {
+  const typeHash = keccak256(
+    toHex(
+      "PermissionedPoolTerms(bytes32 poolId,bytes32 economicsHash,uint256 nonce,uint256 deadline,bytes32 agreementHash)",
+    ),
+  );
+  const structHash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("bytes32,bytes32,bytes32,uint256,uint256,bytes32"),
+      [
+        typeHash,
+        message.poolId,
+        message.economicsHash,
+        _validateUint256(message.nonce, "nonce"),
+        _validateUint256(message.deadline, "deadline"),
+        message.agreementHash,
+      ],
+    ),
+  );
+  return keccak256(concatHex(["0x1901", permissionedPoolDomainSeparator(chainId, diamond), structHash]));
 }
 
 /// @notice Builds the EIP-712 typed data for a `CreatePool` creator authorization, bound to the
@@ -3339,6 +3736,83 @@ export function buildInvalidatePoolCreationNonceCall(nonce: bigint): Hex {
   });
 }
 
+export function buildQuotePermissionedPoolCall(params: CreatePermissionedPoolParams): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "quotePermissionedPool",
+    args: [coerceCreatePermissionedPoolParams(params)],
+  });
+}
+
+export function buildCreatePermissionedPoolCall(
+  params: CreatePermissionedPoolParams,
+  creatorAuthorization: Hex,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "createPermissionedPool",
+    args: [coerceCreatePermissionedPoolParams(params), creatorAuthorization],
+  });
+}
+
+export function buildInvalidatePermissionedAuthorizationNonceCall(nonce: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "invalidatePermissionedAuthorizationNonce",
+    args: [_validateUint256(nonce, "nonce")],
+  });
+}
+
+export function buildApplyPermissionedPoolTermsCall(
+  poolId: Hex,
+  economics: PermissionedPoolEconomics,
+  nonce: bigint,
+  deadline: bigint,
+  agreementHash: Hex,
+  creatorAuthorization: Hex,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "applyPermissionedPoolTerms",
+    args: [
+      poolId,
+      validatedPermissionedEconomics(economics),
+      _validateUint256(nonce, "nonce"),
+      _validateUint256(deadline, "deadline"),
+      agreementHash,
+      creatorAuthorization,
+    ],
+  });
+}
+
+export function buildInvalidatePermissionedConfigurationNonceCall(poolId: Hex, nonce: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "invalidatePermissionedConfigurationNonce",
+    args: [poolId, _validateUint256(nonce, "nonce")],
+  });
+}
+
+export function buildDecommissionPermissionedPoolCall(poolId: Hex): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "decommissionPermissionedPool", args: [poolId] });
+}
+
+export function buildSetPermissionedTrustedPeripheryCall(periphery: Address, trusted: boolean): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "setPermissionedTrustedPeriphery",
+    args: [periphery, trusted],
+  });
+}
+
+export function buildAddRewardRestrictionCall(asset: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "addRewardRestriction", args: [asset] });
+}
+
+export function buildRemoveRewardRestrictionCall(asset: Address): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "removeRewardRestriction", args: [asset] });
+}
+
 export function buildSetPoolCreationFeeCall(amount: bigint): Hex {
   if (amount < 0n || amount > MAX_UINT256) throw new Error("creation fee exceeds uint256");
   return encodeFunctionData({
@@ -3413,6 +3887,7 @@ export function buildHarvestPermanentLiquidityFeesCall(poolId: Hex): Hex {
 }
 
 export function buildClaimCreatorRevenueCall(
+  poolId: Hex,
   asset: Address,
   receiver: Address,
   minReceived: bigint,
@@ -3421,7 +3896,7 @@ export function buildClaimCreatorRevenueCall(
   return encodeFunctionData({
     abi: staticsAbi,
     functionName: "claimCreatorRevenue",
-    args: [asset, receiver, minReceived],
+    args: [poolId, asset, receiver, minReceived],
   });
 }
 
