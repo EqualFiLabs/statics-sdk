@@ -549,6 +549,15 @@ export type PermissionedPoolQuote = {
   authorizationDigest: Hex;
 };
 
+export type PermissionedControllerReplacement = {
+  poolId: Hex;
+  currentController: Address;
+  newController: Address;
+  nonce: bigint;
+  deadline: bigint;
+  agreementHash: Hex;
+};
+
 export type ProtocolFeeDistribution = {
   basketStaker: bigint;
   staticsStaker: bigint;
@@ -1503,6 +1512,7 @@ export const staticsAbi = parseAbi([
   "function createPermissionedPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,address controller,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 authorizationNonce,uint256 deadline,bytes32 agreementHash) params,bytes creatorAuthorization) returns (bytes32 poolId)",
   "function invalidatePermissionedAuthorizationNonce(uint256 nonce)",
   "function applyPermissionedPoolTerms(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 nonce,uint256 deadline,bytes32 agreementHash,bytes creatorAuthorization)",
+  "function replacePermissionedPoolController(bytes32 poolId,address currentController,address newController,uint256 nonce,uint256 deadline,bytes32 agreementHash,bytes creatorAuthorization)",
   "function invalidatePermissionedConfigurationNonce(bytes32 poolId,uint256 nonce)",
   "function decommissionPermissionedPool(bytes32 poolId)",
   "function setPermissionedTrustedPeriphery(address periphery,bool trusted)",
@@ -1510,6 +1520,7 @@ export const staticsAbi = parseAbi([
   "function isPermissionedPool(bytes32 poolId) view returns (bool registered)",
   "function isPermissionedAuthorizationNonceUsed(address creator,uint256 nonce) view returns (bool used)",
   "function permissionedTermsDigest(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 nonce,uint256 deadline,bytes32 agreementHash) view returns (bytes32 digest)",
+  "function permissionedControllerReplacementDigest(bytes32 poolId,address currentController,address newController,uint256 nonce,uint256 deadline,bytes32 agreementHash) view returns (bytes32 digest)",
   "function liquidityIntegration() view returns (address poolManager,address hook,bool installed)",
   "function installLiquidityManager(address manager)",
   "function liquidityManager() view returns (address manager,bool installed)",
@@ -1594,6 +1605,7 @@ export const staticsAbi = parseAbi([
   "event PermissionedAuthorizationNonceInvalidated(address indexed creator,uint256 indexed nonce)",
   "event PermissionedConfigurationNonceInvalidated(bytes32 indexed poolId,uint256 oldNonce,uint256 newNonce)",
   "event PermissionedPoolTermsChanged(bytes32 indexed poolId,uint256 indexed nonce,bytes32 indexed agreementHash,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) oldEconomics,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) newEconomics)",
+  "event PermissionedPoolControllerReplaced(bytes32 indexed poolId,address indexed oldController,address indexed newController,uint256 nonce,bytes32 agreementHash)",
   "event PermissionedPoolDecommissioned(bytes32 indexed poolId)",
   "event PermissionedTrustedPeripherySet(address indexed periphery,bool trusted)",
   "event LiquidityManagerReplaced(address indexed oldManager,address indexed newManager)",
@@ -1682,6 +1694,7 @@ export const staticsPermissionedSwapFeeHookAbi = parseAbi([
   "function poolManager() view returns (address)",
   "function registerPool((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,address controller,address creator,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics) returns (bytes32 poolId)",
   "function setPoolEconomics(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics)",
+  "function setPoolController(bytes32 poolId,address controller)",
   "function decommissionPool((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key)",
   "function setTrustedPeriphery(address periphery,bool trusted)",
   "function poolRegistration(bytes32 poolId) view returns ((address currency0,address currency1,address controller,address creator,bool registered,bool decommissioned) registration)",
@@ -1689,6 +1702,7 @@ export const staticsPermissionedSwapFeeHookAbi = parseAbi([
   "function trustedPeriphery(address periphery) view returns (bool trusted)",
   "event PermissionedPoolRegistered(bytes32 indexed poolId,address indexed currency0,address indexed currency1,address controller,address creator,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics)",
   "event PermissionedPoolEconomicsSet(bytes32 indexed poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) oldEconomics,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) newEconomics)",
+  "event PermissionedPoolControllerSet(bytes32 indexed poolId,address indexed oldController,address indexed newController)",
   "event PermissionedVenueFeeCharged(bytes32 indexed poolId,address indexed outputCurrency,uint256 grossOutput,uint256 chargedAmount,uint256 creatorAmount,uint256 treasuryAmount,uint256 staticsStakerAmount,uint256 basketStakerAmount)",
   "event PermissionedRewardsNormalized(bytes32 indexed poolId,address indexed restrictedCurrency,address indexed rewardCurrency,uint256 amountIn,uint256 amountOut)",
 ]);
@@ -3585,6 +3599,64 @@ export function computePermissionedPoolTermsDigest(
   return keccak256(concatHex(["0x1901", permissionedPoolDomainSeparator(chainId, diamond), structHash]));
 }
 
+export function buildPermissionedControllerReplacementTypedData(
+  chainId: number,
+  diamond: Address,
+  message: PermissionedControllerReplacement,
+) {
+  return {
+    domain: {
+      name: PERMISSIONED_POOLS_DOMAIN_NAME,
+      version: PERMISSIONED_POOLS_DOMAIN_VERSION,
+      chainId,
+      verifyingContract: diamond,
+    },
+    types: {
+      PermissionedPoolControllerReplacement: [
+        { name: "poolId", type: "bytes32" },
+        { name: "currentController", type: "address" },
+        { name: "newController", type: "address" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "agreementHash", type: "bytes32" },
+      ],
+    },
+    primaryType: "PermissionedPoolControllerReplacement",
+    message: {
+      ...message,
+      nonce: _validateUint256(message.nonce, "nonce"),
+      deadline: _validateUint256(message.deadline, "deadline"),
+    },
+  } as const;
+}
+
+export function computePermissionedControllerReplacementDigest(
+  chainId: number,
+  diamond: Address,
+  message: PermissionedControllerReplacement,
+): Hex {
+  const typeHash = keccak256(
+    toHex(
+      "PermissionedPoolControllerReplacement(bytes32 poolId,address currentController,address newController,uint256 nonce,uint256 deadline,bytes32 agreementHash)",
+    ),
+  );
+  const structHash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("bytes32,bytes32,address,address,uint256,uint256,bytes32"),
+      [
+        typeHash,
+        message.poolId,
+        message.currentController,
+        message.newController,
+        _validateUint256(message.nonce, "nonce"),
+        _validateUint256(message.deadline, "deadline"),
+        message.agreementHash,
+      ],
+    ),
+  );
+  return keccak256(concatHex(["0x1901", permissionedPoolDomainSeparator(chainId, diamond), structHash]));
+}
+
 /// @notice Builds the EIP-712 typed data for a `CreatePool` creator authorization, bound to the
 /// Statics Protocol Pools domain and the Diamond `verifyingContract`. `poolId` and `sqrtPriceX96`
 /// are the normalized, sorted values the Diamond derives during quoting.
@@ -3780,6 +3852,25 @@ export function buildApplyPermissionedPoolTermsCall(
       _validateUint256(nonce, "nonce"),
       _validateUint256(deadline, "deadline"),
       agreementHash,
+      creatorAuthorization,
+    ],
+  });
+}
+
+export function buildReplacePermissionedPoolControllerCall(
+  replacement: PermissionedControllerReplacement,
+  creatorAuthorization: Hex,
+): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "replacePermissionedPoolController",
+    args: [
+      replacement.poolId,
+      replacement.currentController,
+      replacement.newController,
+      _validateUint256(replacement.nonce, "nonce"),
+      _validateUint256(replacement.deadline, "deadline"),
+      replacement.agreementHash,
       creatorAuthorization,
     ],
   });

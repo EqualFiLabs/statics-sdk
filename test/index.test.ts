@@ -106,10 +106,12 @@ import {
   buildCreatePoolAuthorizationTypedData,
   buildPermissionedPoolCreationTypedData,
   buildPermissionedPoolTermsTypedData,
+  buildPermissionedControllerReplacementTypedData,
   computeCreatePoolAuthorizationDigest,
   computePermissionedEconomicsHash,
   computePermissionedPoolCreationDigest,
   computePermissionedPoolTermsDigest,
+  computePermissionedControllerReplacementDigest,
   quoteProtocolPool,
   quotePermissionedProtocolPool,
   defaultPermissionedGeneralEconomics,
@@ -117,6 +119,7 @@ import {
   buildCreatePermissionedPoolCall,
   buildInvalidatePermissionedAuthorizationNonceCall,
   buildApplyPermissionedPoolTermsCall,
+  buildReplacePermissionedPoolControllerCall,
   buildInvalidatePermissionedConfigurationNonceCall,
   buildDecommissionPermissionedPoolCall,
   buildSetPermissionedTrustedPeripheryCall,
@@ -774,6 +777,20 @@ describe("Statics static basket quotes", () => {
         "0xabcd",
       ),
     }).functionName).toBe("applyPermissionedPoolTerms");
+    const replacement = {
+      poolId: quote.poolId,
+      currentController: controller,
+      newController: hook,
+      nonce: 1n,
+      deadline: 9_000n,
+      agreementHash,
+    };
+    expect(hashTypedData(buildPermissionedControllerReplacementTypedData(4_663, diamond, replacement)))
+      .toBe(computePermissionedControllerReplacementDigest(4_663, diamond, replacement));
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildReplacePermissionedPoolControllerCall(replacement, "0xabcd"),
+    }).functionName).toBe("replacePermissionedPoolController");
     expect(decodeFunctionData({
       abi: staticsAbi,
       data: buildInvalidatePermissionedConfigurationNonceCall(quote.poolId, 0n),
@@ -801,6 +818,8 @@ describe("Statics static basket quotes", () => {
 
   it("exposes the permissioned hook, router, position and claims bindings", () => {
     expect(staticsPermissionedSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "poolEconomics"))
+      .toBe(true);
+    expect(staticsPermissionedSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "setPoolController"))
       .toBe(true);
     expect(staticsPermissionedRouterAbi.some((item) => item.type === "function" && item.name === "swapExactInputSingle"))
       .toBe(true);
