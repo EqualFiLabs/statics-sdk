@@ -1738,13 +1738,13 @@ export const staticsPermissionedPositionManagerAbi = parseAbi([
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function getPositionLiquidity(uint256 tokenId) view returns (uint128 liquidity)",
   "function modifyLiquidities(bytes unlockData,uint256 deadline) payable",
-  "function forceUnwind(uint256 tokenId,uint128 amount0Min,uint128 amount1Min,bytes hookData)",
 ]);
 
 export const permissionedPositionClaimsAbi = parseAbi([
   "function poolManager() view returns (address)",
   "function positionManager() view returns (address)",
   "function permissionedHook() view returns (address)",
+  "function forceUnwind(uint256 tokenId,uint128 amount0Min,uint128 amount1Min,bytes hookData)",
   "function claim(bytes32 poolId,address currency,address receiver,uint256 amount)",
   "function creditOf(bytes32 poolId,address owner,address currency) view returns (uint256 amount)",
 ]);

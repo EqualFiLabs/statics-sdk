@@ -824,6 +824,8 @@ describe("Statics static basket quotes", () => {
     expect(staticsPermissionedRouterAbi.some((item) => item.type === "function" && item.name === "swapExactInputSingle"))
       .toBe(true);
     expect(staticsPermissionedPositionManagerAbi.some((item) => item.type === "function" && item.name === "forceUnwind"))
+      .toBe(false);
+    expect(permissionedPositionClaimsAbi.some((item) => item.type === "function" && item.name === "forceUnwind"))
       .toBe(true);
     expect(permissionedPositionClaimsAbi.some((item) => item.type === "function" && item.name === "creditOf"))
       .toBe(true);
