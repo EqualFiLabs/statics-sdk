@@ -102,6 +102,8 @@ import {
   buildSetBasketFeeAllocationCall,
   buildSetGeneralFeeAllocationCall,
   buildDecommissionGeneralPoolCall,
+  buildSetPermanentLiquidityHarvesterCall,
+  buildHarvestPermanentLiquidityFeesCall,
   buildCreatePoolAuthorizationTypedData,
   computeCreatePoolAuthorizationDigest,
   quoteProtocolPool,
@@ -547,10 +549,12 @@ describe("Statics static basket quotes", () => {
     expect(quoteExactOutputHookFee(10_000n, 100n)).toBe(102n);
     expect(effectiveCanonicalFees(3_000n, 25n, 25n)).toEqual({
       lpFeePips: 3_000n,
-      lpFeeBps: 30n,
       inputFeeBps: 25n,
       outputFeeBps: 25n,
     });
+    expect(effectiveCanonicalFees(3_001n, 25n, 25n).lpFeePips).toBe(3_001n);
+    expect(() => effectiveCanonicalFees(1_000_000n, 25n, 25n))
+      .toThrow("native LP fee outside protocol bounds");
   });
 
   it("encodes permissionless protocol pool creation, administration and generic manager calls", () => {
@@ -642,6 +646,12 @@ describe("Statics static basket quotes", () => {
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGeneralPoolCall(poolId) }).functionName)
       .toBe("decommissionGeneralPool");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildSetPermanentLiquidityHarvesterCall(receiver),
+    })).toEqual({ functionName: "setPermanentLiquidityHarvester", args: [receiver] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildHarvestPermanentLiquidityFeesCall(poolId) }))
+      .toEqual({ functionName: "harvestPermanentLiquidityFees", args: [poolId] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(assetA, receiver, 5n) }))
       .toEqual({ functionName: "claimCreatorRevenue", args: [assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
@@ -734,7 +744,7 @@ describe("Statics static basket quotes", () => {
     // Distinct tick spacing or configured native fee yields a distinct PoolId.
     expect(computePoolId(buildProtocolPoolKey(assetA, assetB, 61, hook, 3_000))).not.toBe(expected);
     expect(buildProtocolPoolKey(assetA, assetB, 1, hook, 3_000).fee).toBe(3_000);
-    expect(() => buildProtocolPoolKey(assetA, assetB, 1, hook, 1_000_001))
+    expect(() => buildProtocolPoolKey(assetA, assetB, 1, hook, 1_000_000))
       .toThrow("native LP fee outside protocol bounds");
   });
 
@@ -2068,6 +2078,8 @@ describe("Statics unified calldata", () => {
     expect(staticsAbi.some((item) => item.type === "event" && item.name === "CanonicalPoolFeeRateSet"))
       .toBe(true);
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
+      .toBe(true);
+    expect(staticsSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "permanentLiquidityMath"))
       .toBe(true);
     expect(() => buildSetCanonicalPoolFeeRateCall(7n, assetA, 101n, 100n))
       .toThrow("combined pool fee rate exceeds 200 BPS");
