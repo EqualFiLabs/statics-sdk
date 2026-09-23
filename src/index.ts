@@ -502,6 +502,7 @@ export type CreatePoolParams = {
   lpFee: number;
   tickSpacing: number;
   sqrtPriceBPerAX96: bigint;
+  initialFeeRate: PoolSwapFeeRate;
   creator: Address;
   nonce: bigint;
   deadline: bigint;
@@ -1477,8 +1478,8 @@ export const staticsAbi = parseAbi([
   "function installPermissionedPoolIntegration(address hook,address router,address positionManager,address quoter)",
   "function permissionedLiquidityIntegration() view returns (address hook,address router,address positionManager,address quoter,bool installed)",
   "function canonicalPool(uint256 basketId,address asset) view returns ((bytes32 poolId,address basketToken,address asset,address currency0,address currency1,address hook,uint24 lpFee,int24 tickSpacing,int24 spotTick) pool)",
-  "function quotePool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,uint256 nonce,uint256 deadline) params) view returns (((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,bytes32 poolId,uint160 sqrtPriceX96,uint256 creationFee,bytes32 authorizationDigest) quote)",
-  "function createPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,address creator,uint256 nonce,uint256 deadline) params,bytes creatorAuthorization) payable returns (bytes32 poolId)",
+  "function quotePool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,(uint16 inputFeeBps,uint16 outputFeeBps) initialFeeRate,address creator,uint256 nonce,uint256 deadline) params) view returns (((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,bytes32 poolId,uint160 sqrtPriceX96,uint256 creationFee,bytes32 authorizationDigest) quote)",
+  "function createPool((address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,(uint16 inputFeeBps,uint16 outputFeeBps) initialFeeRate,address creator,uint256 nonce,uint256 deadline) params,bytes creatorAuthorization) payable returns (bytes32 poolId)",
   "function invalidatePoolCreationNonce(uint256 nonce)",
   "function setPoolCreationFee(uint256 amount)",
   "function setDefaultProtocolPoolFeeRate((uint16 inputFeeBps,uint16 outputFeeBps) feeRate)",
@@ -3201,7 +3202,7 @@ export const CREATOR_SHARE_BPS = 500n;
 
 /// @dev Statics Protocol Pools EIP-712 domain name and version, matching `ProtocolPoolCreationFacet`.
 export const PROTOCOL_POOLS_DOMAIN_NAME = "Statics Protocol Pools";
-export const PROTOCOL_POOLS_DOMAIN_VERSION = "2";
+export const PROTOCOL_POOLS_DOMAIN_VERSION = "3";
 export const PERMISSIONED_POOLS_DOMAIN_NAME = "Statics Permissioned Pools";
 export const PERMISSIONED_POOLS_DOMAIN_VERSION = "1";
 export const DEFAULT_PERMISSIONED_CREATOR_SHARE_BPS = 8_000n;
@@ -3322,6 +3323,7 @@ function coerceCreatePoolParams(params: CreatePoolParams) {
     lpFee: _validateStaticLpFee(params.lpFee),
     tickSpacing: _validateTickSpacing(params.tickSpacing),
     sqrtPriceBPerAX96: params.sqrtPriceBPerAX96,
+    initialFeeRate: validatedPoolSwapFeeRate(params.initialFeeRate),
     creator: params.creator,
     nonce: _validateUint256(params.nonce, "nonce"),
     deadline: _validateUint256(params.deadline, "deadline"),
@@ -3666,11 +3668,17 @@ export function buildCreatePoolAuthorizationTypedData(
   message: {
     poolId: Hex;
     sqrtPriceX96: bigint;
+    inputFeeBps: bigint;
+    outputFeeBps: bigint;
     creator: Address;
     nonce: bigint;
     deadline: bigint;
   },
 ) {
+  const feeRate = validatedPoolSwapFeeRate({
+    inputFeeBps: message.inputFeeBps,
+    outputFeeBps: message.outputFeeBps,
+  });
   return {
     domain: {
       name: PROTOCOL_POOLS_DOMAIN_NAME,
@@ -3682,6 +3690,8 @@ export function buildCreatePoolAuthorizationTypedData(
       CreatePool: [
         { name: "poolId", type: "bytes32" },
         { name: "sqrtPriceX96", type: "uint160" },
+        { name: "inputFeeBps", type: "uint16" },
+        { name: "outputFeeBps", type: "uint16" },
         { name: "creator", type: "address" },
         { name: "nonce", type: "uint256" },
         { name: "deadline", type: "uint256" },
@@ -3691,6 +3701,8 @@ export function buildCreatePoolAuthorizationTypedData(
     message: {
       poolId: message.poolId,
       sqrtPriceX96: message.sqrtPriceX96,
+      inputFeeBps: feeRate.inputFeeBps,
+      outputFeeBps: feeRate.outputFeeBps,
       creator: message.creator,
       nonce: _validateUint256(message.nonce, "nonce"),
       deadline: _validateUint256(message.deadline, "deadline"),
@@ -3706,6 +3718,8 @@ export function computeCreatePoolAuthorizationDigest(
   message: {
     poolId: Hex;
     sqrtPriceX96: bigint;
+    inputFeeBps: bigint;
+    outputFeeBps: bigint;
     creator: Address;
     nonce: bigint;
     deadline: bigint;
@@ -3728,16 +3742,22 @@ export function computeCreatePoolAuthorizationDigest(
   );
   const createPoolTypeHash = keccak256(
     toHex(
-      "CreatePool(bytes32 poolId,uint160 sqrtPriceX96,address creator,uint256 nonce,uint256 deadline)",
+      "CreatePool(bytes32 poolId,uint160 sqrtPriceX96,uint16 inputFeeBps,uint16 outputFeeBps,address creator,uint256 nonce,uint256 deadline)",
     ),
   );
+  const feeRate = validatedPoolSwapFeeRate({
+    inputFeeBps: message.inputFeeBps,
+    outputFeeBps: message.outputFeeBps,
+  });
   const structHash = keccak256(
     encodeAbiParameters(
-      parseAbiParameters("bytes32,bytes32,uint160,address,uint256,uint256"),
+      parseAbiParameters("bytes32,bytes32,uint160,uint16,uint16,address,uint256,uint256"),
       [
         createPoolTypeHash,
         message.poolId,
         message.sqrtPriceX96,
+        feeRate.inputFeeBps,
+        feeRate.outputFeeBps,
         message.creator,
         _validateUint256(message.nonce, "nonce"),
         _validateUint256(message.deadline, "deadline"),
@@ -3763,6 +3783,8 @@ export function quoteProtocolPool(
   const authorizationDigest = computeCreatePoolAuthorizationDigest(chainId, diamond, {
     poolId,
     sqrtPriceX96,
+    inputFeeBps: params.initialFeeRate.inputFeeBps,
+    outputFeeBps: params.initialFeeRate.outputFeeBps,
     creator: params.creator,
     nonce: params.nonce,
     deadline: params.deadline,

@@ -219,17 +219,20 @@ unrelated protocol pool between any two compatible ERC-20s with
 `buildCreatePoolTransaction` by paying that exact fee. A zero fee disables
 permissionless creation and permits only the Diamond owner to create. Assemble
 the `CreatePoolParams` with a static native `lpFee` from 0 through 999,999 pips
-and a `tickSpacing` from 1 through 32,767
+and a `tickSpacing` from 1 through 32,767, plus an `initialFeeRate` whose input
+and output legs are each at least the current global default and whose combined
+rate does not exceed 200 BPS,
 by sorting the pair with `sortPoolCurrencies` and encoding the raw
 token-B-per-token-A price with `encodeSqrtPriceBPerAX96`; the SDK normalizes it
 to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
 `quoteProtocolPool` (or `buildQuotePoolCall`) before submission to recover the
 canonical `poolId` and the normalized `sqrtPriceX96`. When creation requires an
 authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
-EIP-712 `CreatePool` payload — domain `Statics Protocol Pools`, version `2`, the
-chain id, and the Diamond as `verifyingContract`, over the PoolId and normalized
-`sqrtPriceX96` — and `computeCreatePoolAuthorizationDigest` reproduces the exact
-digest the Diamond verifies. Read `quotePool(params).creationFee` immediately
+EIP-712 `CreatePool` payload under domain `Statics Protocol Pools`, version `3`,
+the chain id, and the Diamond as `verifyingContract`. The signed message binds
+the PoolId, normalized `sqrtPriceX96`, and both initial hook-fee legs, and
+`computeCreatePoolAuthorizationDigest` reproduces the exact digest the Diamond
+verifies. Read `quotePool(params).creationFee` immediately
 before calling `buildCreatePoolTransaction(params, creationFee, creatorAuthorization)`;
 the returned transaction includes that fee as `value`
 (`buildSetPoolCreationFeeCall` administers it).
@@ -244,9 +247,10 @@ and `totalCreatorRevenue` cover discovery and revenue reads. Fee administration
 uses `buildSetDefaultProtocolPoolFeeRateCall`,
 `buildSetProtocolPoolFeeRateCall`, `buildClearProtocolPoolFeeRateCall`,
 `buildSetBasketFeeAllocationCall`, and `buildSetGeneralFeeAllocationCall`.
-The 25-BPS-per-side global default applies immediately to every non-overridden
-public pool; the PoolId override builders work for basket and permissionless
-general pools. Pool creators claim PoolId-local revenue with
+The initial 5-BPS-per-side global default applies immediately to every
+non-overridden public pool. A general-pool creator may select a higher rate only
+at creation; the PoolId override builders remain governance-only and work for
+basket and permissionless general pools. Pool creators claim PoolId-local revenue with
 `buildClaimCreatorRevenueCall(poolId, asset, receiver, minReceived)`, and
 `buildDecommissionGeneralPoolCall` performs
 the irreversible treasury recovery of a non-basket pool without touching user

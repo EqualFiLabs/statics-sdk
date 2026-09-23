@@ -590,6 +590,7 @@ describe("Statics static basket quotes", () => {
       lpFee: 500,
       tickSpacing: 60,
       sqrtPriceBPerAX96: encodeSqrtPriceBPerAX96(1n, 1n),
+      initialFeeRate: feeRate,
       creator: receiver,
       nonce: 7n,
       deadline: 7_200n,
@@ -604,6 +605,9 @@ describe("Statics static basket quotes", () => {
       data: createTransaction.data,
     });
     expect(createData.functionName).toBe("createPool");
+    expect(createData.args?.[0]).toMatchObject({
+      initialFeeRate: { inputFeeBps: 40, outputFeeBps: 60 },
+    });
     expect(createData.args?.[1]).toBe("0xabcd");
     expect(decodeFunctionData({
       abi: staticsAbi,
@@ -616,6 +620,10 @@ describe("Statics static basket quotes", () => {
       .toThrow("tick spacing outside protocol bounds");
     expect(() => buildCreatePoolTransaction({ ...createParams, tickSpacing: 32_768 }, 0n))
       .toThrow("tick spacing outside protocol bounds");
+    expect(() => buildCreatePoolTransaction({
+      ...createParams,
+      initialFeeRate: { inputFeeBps: 100n, outputFeeBps: 101n },
+    }, 0n)).toThrow("combined pool fee rate exceeds 200 BPS");
     expect(() => buildCreatePoolTransaction(createParams, -1n)).toThrow("creationFee exceeds uint256");
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildInvalidatePoolCreationNonceCall(9n) }))
@@ -915,6 +923,8 @@ describe("Statics static basket quotes", () => {
     const message = {
       poolId,
       sqrtPriceX96: Q96,
+      inputFeeBps: 40n,
+      outputFeeBps: 60n,
       creator: receiver,
       nonce: 7n,
       deadline: 7_200n,
@@ -923,7 +933,7 @@ describe("Statics static basket quotes", () => {
     const typedData = buildCreatePoolAuthorizationTypedData(chainId, diamond, message);
     expect(typedData.domain).toEqual({
       name: "Statics Protocol Pools",
-      version: "2",
+      version: "3",
       chainId,
       verifyingContract: diamond,
     });
@@ -931,6 +941,8 @@ describe("Statics static basket quotes", () => {
     expect(typedData.types.CreatePool.map((f) => f.name)).toEqual([
       "poolId",
       "sqrtPriceX96",
+      "inputFeeBps",
+      "outputFeeBps",
       "creator",
       "nonce",
       "deadline",
@@ -951,6 +963,7 @@ describe("Statics static basket quotes", () => {
         lpFee: 3_000,
         tickSpacing: 60,
         sqrtPriceBPerAX96: Q96,
+        initialFeeRate: { inputFeeBps: 40n, outputFeeBps: 60n },
         creator: receiver,
         nonce: 7n,
         deadline: 7_200n,
@@ -964,11 +977,13 @@ describe("Statics static basket quotes", () => {
     expect(quote.authorizationDigest).toBe(manual);
   });
 
-  it("changing the domain, price, or nonce changes the CreatePool digest", () => {
+  it("changing the domain, price, fee rate, or nonce changes the CreatePool digest", () => {
     const diamond = "0x00000000000000000000000000000000000d1a30" as const;
     const base = {
       poolId: `0x${"11".repeat(32)}` as const,
       sqrtPriceX96: Q96,
+      inputFeeBps: 40n,
+      outputFeeBps: 60n,
       creator: receiver,
       nonce: 1n,
       deadline: 7_200n,
@@ -980,6 +995,8 @@ describe("Statics static basket quotes", () => {
     ).not.toBe(baseDigest);
     expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, nonce: 2n })).not.toBe(baseDigest);
     expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, sqrtPriceX96: Q96 + 1n })).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, inputFeeBps: 41n })).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, outputFeeBps: 61n })).not.toBe(baseDigest);
   });
 
   it("decodes permissionless protocol pool and creator-revenue events", () => {
