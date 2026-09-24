@@ -9,6 +9,7 @@ import {
 
 const MAX_UINT40 = (1n << 40n) - 1n;
 const MAX_INT128 = (1n << 127n) - 1n;
+const MAX_REWARD_SLOT = 4;
 const MIN_INT24 = -(1 << 23);
 const MAX_INT24 = (1 << 23) - 1;
 
@@ -59,7 +60,7 @@ export type RangeGaugeLiquidityMovement = {
 export type RangeGaugePoolRewardConfig = {
   initialized: boolean;
   slotCount: number;
-  assets: readonly [Address, Address, Address, Address];
+  assets: readonly [Address, Address, Address, Address, Address];
 };
 
 export type RangeGaugePool = {
@@ -75,11 +76,13 @@ export type RangeGaugeRewardStream = {
   assigned: boolean;
   slot: number;
   asset: Address;
+  protocolEpoch: bigint;
   periodStart: number;
   periodFinish: number;
   lastUpdate: number;
   periodBudget: bigint;
   periodEmitted: bigint;
+  periodRecycled: bigint;
   globalIndexRay: bigint;
   indexRemainder: bigint;
   indexedLiability: bigint;
@@ -90,7 +93,7 @@ export type RangeGaugeRewardStream = {
 export type RangeGaugeBoundary = {
   grossLiquidity: bigint;
   netLiquidity: bigint;
-  rewardOutsideRay: readonly [bigint, bigint, bigint, bigint];
+  rewardOutsideRay: readonly [bigint, bigint, bigint, bigint, bigint];
 };
 
 export type RangeGaugeLpLeg = {
@@ -99,9 +102,9 @@ export type RangeGaugeLpLeg = {
   tickLower: number;
   tickUpper: number;
   liquidity: bigint;
-  checkpointInsideRay: readonly [bigint, bigint, bigint, bigint];
-  rewardRemainderRay: readonly [bigint, bigint, bigint, bigint];
-  claimable: readonly [bigint, bigint, bigint, bigint];
+  checkpointInsideRay: readonly [bigint, bigint, bigint, bigint, bigint];
+  rewardRemainderRay: readonly [bigint, bigint, bigint, bigint, bigint];
+  claimable: readonly [bigint, bigint, bigint, bigint, bigint];
 };
 
 export type RangeGaugeLpLegState = RangeGaugeLpLeg & {
@@ -110,8 +113,8 @@ export type RangeGaugeLpLegState = RangeGaugeLpLeg & {
 
 export type RangeGaugePendingRewards = {
   slotCount: number;
-  assets: readonly [Address, Address, Address, Address];
-  amounts: readonly [bigint, bigint, bigint, bigint];
+  assets: readonly [Address, Address, Address, Address, Address];
+  amounts: readonly [bigint, bigint, bigint, bigint, bigint];
 };
 
 export type RangeGaugePositionPoolPage = {
@@ -160,7 +163,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function setGaugeRewardAssetAllowed(address asset,bool allowed)",
   "function setGaugeRewardDuration(uint40 duration)",
   "function appendPoolRewardAsset(bytes32 poolId,address asset) returns (uint8 slot)",
-  "function fundPoolReward(bytes32 poolId,address asset,uint256 amount,uint40 minRemainingDuration) returns (uint256 received)",
+  "function fundPoolReward(bytes32 poolId,uint8 slot,uint256 amount,uint40 minRemainingDuration) returns (uint256 received)",
   "function installLiquidityManager(address manager)",
   "function replaceLiquidityManager(address newManager)",
   "function provideLiquidity(uint256 positionId,(bytes32 poolId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256 amount0Maximum,uint256 amount1Maximum,uint256 deadline) params) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
@@ -170,23 +173,23 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function collectNativeFees(uint256 positionId,bytes32 poolId,uint256 amount0Minimum,uint256 amount1Minimum,uint256 deadline) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
   "function rebalanceLiquidity(uint256 positionId,bytes32 poolId,(int24 tickLower,int24 tickUpper,uint128 liquidity,uint256 amount0Maximum,uint256 amount1Maximum,uint256 amount0Minimum,uint256 amount1Minimum,uint256 deadline) params) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
   "function exitLiquidity(uint256 positionId,bytes32 poolId,uint256 amount0Minimum,uint256 amount1Minimum,uint256 deadline) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
-  "function claimLpRewards(uint256 positionId,bytes32 poolId,address[] assets,uint256[] minimumAmounts,address receiver) returns (uint256[] received)",
-  "function forfeitLpReward(uint256 positionId,bytes32 poolId,address asset) returns (uint256 amount)",
+  "function claimLpRewards(uint256 positionId,bytes32 poolId,uint8[] slots,uint256[] minimumAmounts,address receiver) returns (uint256[] received)",
+  "function forfeitLpReward(uint256 positionId,bytes32 poolId,uint8 slot) returns (uint256 amount)",
   "function recoverUnboundPosm(address manager,uint256 posmTokenId,address receiver)",
-  "function reconcilePoolRewardSurplus(bytes32 poolId,address asset) returns (uint256 amount)",
+  "function reconcilePoolRewardSurplus(bytes32 poolId,uint8 slot) returns (uint256 amount)",
   "function gaugeRewardDuration() view returns (uint40 duration)",
   "function gaugeRewardAssetAllowed(address asset) view returns (bool allowed)",
-  "function poolRewardConfig(bytes32 poolId) view returns ((bool initialized,uint8 slotCount,address[4] assets) config)",
+  "function poolRewardConfig(bytes32 poolId) view returns ((bool initialized,uint8 slotCount,address[5] assets) config)",
   "function gaugePool(bytes32 poolId) view returns ((bool initialized,bool stopped,int24 referenceTick,uint128 activeGaugeLiquidity,uint64 managedLegCount,uint64 unresolvedLegCount) pool)",
-  "function poolRewardStream(bytes32 poolId,address asset) view returns ((bool assigned,uint8 slot,address asset,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 globalIndexRay,uint256 indexRemainder,uint256 indexedLiability,uint256 claimLiability,uint256 indexCapacityUsed) stream)",
-  "function poolRewardCustodyAccount(bytes32 poolId,address asset) view returns (bytes32 account,bool assigned)",
-  "function gaugeBoundary(bytes32 poolId,int24 tick) view returns ((uint128 grossLiquidity,int128 netLiquidity,uint256[4] rewardOutsideRay) boundary)",
-  "function lpLeg(uint256 positionId,bytes32 poolId) view returns ((address manager,uint256 posmTokenId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256[4] checkpointInsideRay,uint256[4] rewardRemainderRay,uint256[4] claimable) leg)",
+  "function poolRewardStream(bytes32 poolId,uint8 slot) view returns ((bool assigned,uint8 slot,address asset,uint64 protocolEpoch,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 periodRecycled,uint256 globalIndexRay,uint256 indexRemainder,uint256 indexedLiability,uint256 claimLiability,uint256 indexCapacityUsed) stream)",
+  "function poolRewardCustodyAccount(bytes32 poolId,uint8 slot) view returns (bytes32 account,bool assigned)",
+  "function gaugeBoundary(bytes32 poolId,int24 tick) view returns ((uint128 grossLiquidity,int128 netLiquidity,uint256[5] rewardOutsideRay) boundary)",
+  "function lpLeg(uint256 positionId,bytes32 poolId) view returns ((address manager,uint256 posmTokenId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256[5] checkpointInsideRay,uint256[5] rewardRemainderRay,uint256[5] claimable) leg)",
   "function positionGaugePools(uint256 positionId,uint256 cursor,uint256 size) view returns (bytes32[] poolIds,uint256 nextCursor)",
   "function posmBinding(uint256 posmTokenId) view returns (bytes32 binding)",
   "function liquidityManager() view returns (address manager,bool installed)",
   "function recordedLiquidityManager(uint256 positionId,bytes32 poolId) view returns (address manager)",
-  "function previewLpRewards(uint256 positionId,bytes32 poolId) view returns ((uint8 slotCount,address[4] assets,uint256[4] amounts) pending)",
+  "function previewLpRewards(uint256 positionId,bytes32 poolId) view returns ((uint8 slotCount,address[5] assets,uint256[5] amounts) pending)",
   "event GaugeRewardAssetAllowedSet(address indexed asset,bool allowed)",
   "event GaugeRewardDurationSet(uint40 duration)",
   "event PoolRewardAssetAppended(bytes32 indexed poolId,address indexed asset,uint8 indexed slot)",
@@ -196,8 +199,8 @@ export const staticsRangeGaugeAbi = parseAbi([
   "event ManagedLiquidityChanged(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,uint128 liquidity)",
   "event ManagedLiquidityRebalanced(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed oldPosmTokenId,uint256 newPosmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
   "event ManagedLiquidityExited(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId)",
-  "event LpRewardsClaimed(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,address receiver,uint256 debited,uint256 received)",
-  "event LpRewardForfeited(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,uint256 amount)",
+  "event LpRewardsClaimed(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,uint8 slot,address receiver,uint256 debited,uint256 received)",
+  "event LpRewardForfeited(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,uint8 slot,uint256 amount)",
   "event UnboundPosmRecovered(address indexed manager,uint256 indexed posmTokenId,address indexed receiver)",
   "event PoolRewardSurplusReconciled(bytes32 indexed poolId,address indexed asset,uint8 indexed slot,uint256 amount)",
   "event PoolGaugeStopped(bytes32 indexed poolId)",
@@ -209,10 +212,13 @@ export const staticsRangeGaugeAbi = parseAbi([
   "error GaugeRewardAssetNotAllowed(address asset)",
   "error GaugeRewardAssetRestricted(address asset)",
   "error GaugeRewardAssetNotAssigned(bytes32 poolId,address asset)",
+  "error GaugeRewardSlotNotAssigned(bytes32 poolId,uint8 slot)",
+  "error ProtocolRewardSlotReserved(bytes32 poolId)",
   "error MinimumRemainingDurationNotMet(uint40 available,uint40 minimum)",
   "error RewardBudgetExceedsIndexCapacity(uint256 committedBudget,uint256 received,uint256 maximumBudget)",
   "error InvalidReceiver(address receiver)",
   "error ArrayLengthMismatch()",
+  "error DuplicateRewardSlot(uint8 slot)",
   "error ManagedLegAlreadyExists(uint256 positionId,bytes32 poolId)",
   "error ManagedLegNotFound(uint256 positionId,bytes32 poolId)",
   "error UnauthorizedPositionActor(uint256 positionId,address caller)",
@@ -224,8 +230,8 @@ export const staticsRangeGaugeAbi = parseAbi([
   "error ManagerAssetTransferMismatch(address asset,uint256 expected,uint256 actual)",
   "error InvalidPositionState(uint256 positionId,bytes32 poolId)",
   "error RewardAmountBelowMinimum(address asset,uint256 received,uint256 minimum)",
-  "error PoolRewardReconciliationUnavailable(bytes32 poolId,address asset)",
-  "error ClaimLiabilityUnderflow(bytes32 poolId,address asset,uint256 liability,uint256 amount)",
+  "error PoolRewardReconciliationUnavailable(bytes32 poolId,uint8 slot)",
+  "error ClaimLiabilityUnderflow(bytes32 poolId,uint8 slot,uint256 liability,uint256 amount)",
 ]);
 
 export type RangeGaugeEventName =
@@ -268,6 +274,14 @@ function validateRange(lower: number, upper: number): void {
 function validateManagedLiquidity(liquidity: bigint): bigint {
   if (liquidity === 0n) throw new Error("liquidity must be greater than zero");
   return validateUint(liquidity, MAX_INT128, "liquidity");
+}
+
+function validateRewardSlot(slot: number, allowProtocolSlot: boolean): number {
+  const minimum = allowProtocolSlot ? 0 : 1;
+  if (!Number.isInteger(slot) || slot < minimum || slot > MAX_REWARD_SLOT) {
+    throw new Error(`slot must be between ${minimum} and ${MAX_REWARD_SLOT}`);
+  }
+  return slot;
 }
 
 function validateProvideParams(params: RangeGaugeProvideLiquidityParams): RangeGaugeProvideLiquidityParams {
@@ -314,14 +328,19 @@ export function buildAppendPoolRewardAssetCall(poolId: Hex, asset: Address): Hex
 
 export function buildFundPoolRewardCall(
   poolId: Hex,
-  asset: Address,
+  slot: number,
   amount: bigint,
   minRemainingDuration: bigint,
 ): Hex {
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "fundPoolReward",
-    args: [poolId, asset, amount, Number(validateUint(minRemainingDuration, MAX_UINT40, "minRemainingDuration"))],
+    args: [
+      poolId,
+      validateRewardSlot(slot, false),
+      amount,
+      Number(validateUint(minRemainingDuration, MAX_UINT40, "minRemainingDuration")),
+    ],
   });
 }
 
@@ -419,23 +438,24 @@ export function buildExitRangeLiquidityCall(
 export function buildClaimRangeLpRewardsCall(
   positionId: bigint,
   poolId: Hex,
-  assets: readonly Address[],
+  slots: readonly number[],
   minimumAmounts: readonly bigint[],
   receiver: Address,
 ): Hex {
-  if (assets.length !== minimumAmounts.length) throw new Error("assets and minimumAmounts length mismatch");
+  if (slots.length !== minimumAmounts.length) throw new Error("slots and minimumAmounts length mismatch");
+  const validatedSlots = slots.map((slot) => validateRewardSlot(slot, true));
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "claimLpRewards",
-    args: [positionId, poolId, assets, minimumAmounts, receiver],
+    args: [positionId, poolId, validatedSlots, minimumAmounts, receiver],
   });
 }
 
-export function buildForfeitRangeLpRewardCall(positionId: bigint, poolId: Hex, asset: Address): Hex {
+export function buildForfeitRangeLpRewardCall(positionId: bigint, poolId: Hex, slot: number): Hex {
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "forfeitLpReward",
-    args: [positionId, poolId, asset],
+    args: [positionId, poolId, validateRewardSlot(slot, true)],
   });
 }
 
@@ -447,11 +467,11 @@ export function buildRecoverUnboundPosmCall(manager: Address, posmTokenId: bigin
   });
 }
 
-export function buildReconcilePoolRewardSurplusCall(poolId: Hex, asset: Address): Hex {
+export function buildReconcilePoolRewardSurplusCall(poolId: Hex, slot: number): Hex {
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "reconcilePoolRewardSurplus",
-    args: [poolId, asset],
+    args: [poolId, validateRewardSlot(slot, true)],
   });
 }
 
@@ -471,15 +491,19 @@ export function buildGaugePoolCall(poolId: Hex): Hex {
   return encodeFunctionData({ abi: staticsRangeGaugeAbi, functionName: "gaugePool", args: [poolId] });
 }
 
-export function buildPoolRewardStreamCall(poolId: Hex, asset: Address): Hex {
-  return encodeFunctionData({ abi: staticsRangeGaugeAbi, functionName: "poolRewardStream", args: [poolId, asset] });
+export function buildPoolRewardStreamCall(poolId: Hex, slot: number): Hex {
+  return encodeFunctionData({
+    abi: staticsRangeGaugeAbi,
+    functionName: "poolRewardStream",
+    args: [poolId, validateRewardSlot(slot, true)],
+  });
 }
 
-export function buildPoolRewardCustodyAccountCall(poolId: Hex, asset: Address): Hex {
+export function buildPoolRewardCustodyAccountCall(poolId: Hex, slot: number): Hex {
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "poolRewardCustodyAccount",
-    args: [poolId, asset],
+    args: [poolId, validateRewardSlot(slot, true)],
   });
 }
 

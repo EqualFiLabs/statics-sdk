@@ -11,8 +11,10 @@ import {
   type Hex,
 } from "viem";
 import { staticsRangeGaugeAbi } from "./range-gauges.js";
+import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
+export * from "./gauge-incentives.js";
 export * from "./range-gauges.js";
 
 export const BPS = 10_000n;
@@ -1622,6 +1624,7 @@ export const staticsAbi = [
   "event BasketRewardDustRouted(uint256 indexed basketId,address indexed asset,uint256 amount)",
   ]),
   ...staticsRangeGaugeAbi,
+  ...staticsGaugeIncentivesAbi,
 ] as const;
 
 export const staticsFlashAssetBorrowerAbi = parseAbi([

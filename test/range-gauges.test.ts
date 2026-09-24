@@ -177,11 +177,13 @@ describe("range gauge calldata", () => {
 
     const funding = decodeFunctionData({
       abi: staticsRangeGaugeAbi,
-      data: buildFundPoolRewardCall(poolId, asset, 1_000n, 86_400n),
+      data: buildFundPoolRewardCall(poolId, 2, 1_000n, 86_400n),
     });
     expect(funding.functionName).toBe("fundPoolReward");
-    expect(funding.args).toEqual([poolId, asset, 1_000n, 86_400]);
-    expect(() => buildFundPoolRewardCall(poolId, asset, 1n, 1n << 40n)).toThrow(/minRemainingDuration/);
+    expect(funding.args).toEqual([poolId, 2, 1_000n, 86_400]);
+    expect(() => buildFundPoolRewardCall(poolId, 0, 1n, 1n)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 5, 1n, 1n)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n << 40n)).toThrow(/minRemainingDuration/);
   });
 
   it("builds the complete managed position lifecycle", () => {
@@ -231,25 +233,25 @@ describe("range gauge calldata", () => {
   });
 
   it("builds independent reward and recovery calls", () => {
-    expect(decodedName(buildClaimRangeLpRewardsCall(1n, poolId, [asset], [9n], receiver))).toBe("claimLpRewards");
-    expect(() => buildClaimRangeLpRewardsCall(1n, poolId, [asset], [], receiver)).toThrow(/length mismatch/);
-    expect(decodedName(buildForfeitRangeLpRewardCall(1n, poolId, asset))).toBe("forfeitLpReward");
+    expect(decodedName(buildClaimRangeLpRewardsCall(1n, poolId, [2], [9n], receiver))).toBe("claimLpRewards");
+    expect(() => buildClaimRangeLpRewardsCall(1n, poolId, [2], [], receiver)).toThrow(/length mismatch/);
+    expect(decodedName(buildForfeitRangeLpRewardCall(1n, poolId, 2))).toBe("forfeitLpReward");
     expect(decodedName(buildRecoverUnboundPosmCall(manager, 7n, receiver))).toBe("recoverUnboundPosm");
-    expect(decodedName(buildReconcilePoolRewardSurplusCall(poolId, asset))).toBe("reconcilePoolRewardSurplus");
+    expect(decodedName(buildReconcilePoolRewardSurplusCall(poolId, 2))).toBe("reconcilePoolRewardSurplus");
   });
 });
 
 describe("range gauge discovery and previews", () => {
-  const emptyFour = [0n, 0n, 0n, 0n] as const;
+  const emptyFive = [0n, 0n, 0n, 0n, 0n] as const;
   const emptyLeg: RangeGaugeLpLeg = {
     manager: zeroAddress,
     posmTokenId: 0n,
     tickLower: 0,
     tickUpper: 0,
     liquidity: 0n,
-    checkpointInsideRay: emptyFour,
-    rewardRemainderRay: emptyFour,
-    claimable: emptyFour,
+    checkpointInsideRay: emptyFive,
+    rewardRemainderRay: emptyFive,
+    claimable: emptyFive,
   };
 
   it("builds and decodes paginated PNFT PoolId discovery", () => {
@@ -267,8 +269,8 @@ describe("range gauge discovery and previews", () => {
     expect(decodedName(buildGaugeRewardAssetAllowedCall(asset))).toBe("gaugeRewardAssetAllowed");
     expect(decodedName(buildPoolRewardConfigCall(poolId))).toBe("poolRewardConfig");
     expect(decodedName(buildGaugePoolCall(poolId))).toBe("gaugePool");
-    expect(decodedName(buildPoolRewardStreamCall(poolId, asset))).toBe("poolRewardStream");
-    expect(decodedName(buildPoolRewardCustodyAccountCall(poolId, asset))).toBe("poolRewardCustodyAccount");
+    expect(decodedName(buildPoolRewardStreamCall(poolId, 2))).toBe("poolRewardStream");
+    expect(decodedName(buildPoolRewardCustodyAccountCall(poolId, 2))).toBe("poolRewardCustodyAccount");
     expect(decodedName(buildGaugeBoundaryCall(poolId, -120))).toBe("gaugeBoundary");
     expect(decodedName(buildPosmBindingCall(7n))).toBe("posmBinding");
     expect(decodedName(buildRangeGaugeLiquidityManagerCall())).toBe("liquidityManager");
@@ -280,12 +282,16 @@ describe("range gauge discovery and previews", () => {
     const result = encodeFunctionResult({
       abi: staticsRangeGaugeAbi,
       functionName: "previewLpRewards",
-      result: { slotCount: 1, assets: [asset, zeroAddress, zeroAddress, zeroAddress], amounts: [9n, 0n, 0n, 0n] },
+      result: {
+        slotCount: 1,
+        assets: [asset, zeroAddress, zeroAddress, zeroAddress, zeroAddress],
+        amounts: [9n, 0n, 0n, 0n, 0n],
+      },
     });
     expect(decodePreviewRangeLpRewardsResult(result)).toEqual({
       slotCount: 1,
-      assets: [asset, zeroAddress, zeroAddress, zeroAddress],
-      amounts: [9n, 0n, 0n, 0n],
+      assets: [asset, zeroAddress, zeroAddress, zeroAddress, zeroAddress],
+      amounts: [9n, 0n, 0n, 0n, 0n],
     });
   });
 
@@ -294,11 +300,13 @@ describe("range gauge discovery and previews", () => {
       assigned: true,
       slot: 1,
       asset,
+      protocolEpoch: 0n,
       periodStart: 1,
       periodFinish: 2,
       lastUpdate: 1,
       periodBudget: 11n,
       periodEmitted: 3n,
+      periodRecycled: 0n,
       globalIndexRay: 30n,
       indexRemainder: 2n,
       indexedLiability: 3n,
@@ -315,15 +323,15 @@ describe("range gauge discovery and previews", () => {
 
   it("exposes claim-only state for exited legs with residual accounting", () => {
     expect(isRangeGaugeClaimOnlyLeg(emptyLeg)).toBe(false);
-    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, liquidity: 1n, claimable: [1n, 0n, 0n, 0n] })).toBe(false);
-    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, claimable: [1n, 0n, 0n, 0n] })).toBe(true);
-    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, rewardRemainderRay: [1n, 0n, 0n, 0n] })).toBe(true);
+    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, liquidity: 1n, claimable: [1n, 0n, 0n, 0n, 0n] })).toBe(false);
+    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, claimable: [1n, 0n, 0n, 0n, 0n] })).toBe(true);
+    expect(isRangeGaugeClaimOnlyLeg({ ...emptyLeg, rewardRemainderRay: [1n, 0n, 0n, 0n, 0n] })).toBe(true);
 
     expect(decodedName(buildRangeGaugeLpLegCall(42n, poolId))).toBe("lpLeg");
     const result = encodeFunctionResult({
       abi: staticsRangeGaugeAbi,
       functionName: "lpLeg",
-      result: { ...emptyLeg, claimable: [1n, 0n, 0n, 0n] },
+      result: { ...emptyLeg, claimable: [1n, 0n, 0n, 0n, 0n] },
     });
     expect(decodeRangeGaugeLpLegResult(result)).toMatchObject({ liquidity: 0n, claimOnly: true });
   });
