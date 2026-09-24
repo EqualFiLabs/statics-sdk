@@ -8,6 +8,7 @@ import {
 } from "viem";
 
 const MAX_UINT40 = (1n << 40n) - 1n;
+const MAX_UINT64 = (1n << 64n) - 1n;
 const MAX_INT128 = (1n << 127n) - 1n;
 const MAX_REWARD_SLOT = 4;
 const BPS = 10_000;
@@ -167,7 +168,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function setGaugeRewardDuration(uint40 duration)",
   "function appendPoolRewardAsset(bytes32 poolId,address asset) returns (uint8 slot)",
   "function setPoolRewardAllocatorShare(bytes32 poolId,uint8 slot,uint16 allocatorShareBps)",
-  "function fundPoolReward(bytes32 poolId,uint8 slot,uint256 amount,uint40 minRemainingDuration,uint16 expectedAllocatorShareBps) returns (uint256 received)",
+  "function fundPoolReward(bytes32 poolId,uint8 slot,uint256 amount,uint40 minRemainingDuration,uint16 expectedAllocatorShareBps,uint64 expectedAllocatorEpoch) returns (uint256 received)",
   "function installLiquidityManager(address manager)",
   "function replaceLiquidityManager(address newManager)",
   "function provideLiquidity(uint256 positionId,(bytes32 poolId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256 amount0Maximum,uint256 amount1Maximum,uint256 deadline) params) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
@@ -222,6 +223,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "error ProtocolRewardSlotReserved(bytes32 poolId)",
   "error InvalidAllocatorShareBps(uint256 allocatorShareBps)",
   "error AllocatorShareChanged(uint16 expectedAllocatorShareBps,uint16 actualAllocatorShareBps)",
+  "error AllocatorEpochChanged(uint64 expectedAllocatorEpoch,uint64 actualAllocatorEpoch)",
   "error GaugeAllocatorPoolIneligible(bytes32 poolId)",
   "error MinimumRemainingDurationNotMet(uint40 available,uint40 minimum)",
   "error RewardBudgetExceedsIndexCapacity(uint256 committedBudget,uint256 received,uint256 maximumBudget)",
@@ -354,6 +356,7 @@ export function buildFundPoolRewardCall(
   amount: bigint,
   minRemainingDuration: bigint,
   expectedAllocatorShareBps: number,
+  expectedAllocatorEpoch: bigint,
 ): Hex {
   if (
     !Number.isInteger(expectedAllocatorShareBps) ||
@@ -371,6 +374,7 @@ export function buildFundPoolRewardCall(
       amount,
       Number(validateUint(minRemainingDuration, MAX_UINT40, "minRemainingDuration")),
       expectedAllocatorShareBps,
+      validateUint(expectedAllocatorEpoch, MAX_UINT64, "expectedAllocatorEpoch"),
     ],
   });
 }
