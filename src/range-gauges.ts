@@ -8,7 +8,7 @@ import {
 } from "viem";
 
 const MAX_UINT40 = (1n << 40n) - 1n;
-const MAX_UINT128 = (1n << 128n) - 1n;
+const MAX_INT128 = (1n << 127n) - 1n;
 const MIN_INT24 = -(1 << 23);
 const MAX_INT24 = (1 << 23) - 1;
 
@@ -209,6 +209,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "error GaugeRewardAssetRestricted(address asset)",
   "error GaugeRewardAssetNotAssigned(bytes32 poolId,address asset)",
   "error MinimumRemainingDurationNotMet(uint40 available,uint40 minimum)",
+  "error RewardBudgetExceedsIndexCapacity(uint256 remainingBudget,uint256 received,uint256 maximumBudget)",
   "error InvalidReceiver(address receiver)",
   "error ArrayLengthMismatch()",
   "error ManagedLegAlreadyExists(uint256 positionId,bytes32 poolId)",
@@ -263,25 +264,30 @@ function validateRange(lower: number, upper: number): void {
   if (lower >= upper) throw new Error("tickLower must be less than tickUpper");
 }
 
+function validateManagedLiquidity(liquidity: bigint): bigint {
+  if (liquidity === 0n) throw new Error("liquidity must be greater than zero");
+  return validateUint(liquidity, MAX_INT128, "liquidity");
+}
+
 function validateProvideParams(params: RangeGaugeProvideLiquidityParams): RangeGaugeProvideLiquidityParams {
   validateRange(params.tickLower, params.tickUpper);
-  validateUint(params.liquidity, MAX_UINT128, "liquidity");
+  validateManagedLiquidity(params.liquidity);
   return params;
 }
 
 function validateIncreaseParams(params: RangeGaugeIncreaseLiquidityParams): RangeGaugeIncreaseLiquidityParams {
-  validateUint(params.liquidity, MAX_UINT128, "liquidity");
+  validateManagedLiquidity(params.liquidity);
   return params;
 }
 
 function validateDecreaseParams(params: RangeGaugeDecreaseLiquidityParams): RangeGaugeDecreaseLiquidityParams {
-  validateUint(params.liquidity, MAX_UINT128, "liquidity");
+  validateManagedLiquidity(params.liquidity);
   return params;
 }
 
 function validateRebalanceParams(params: RangeGaugeRebalanceLiquidityParams): RangeGaugeRebalanceLiquidityParams {
   validateRange(params.tickLower, params.tickUpper);
-  validateUint(params.liquidity, MAX_UINT128, "liquidity");
+  validateManagedLiquidity(params.liquidity);
   return params;
 }
 

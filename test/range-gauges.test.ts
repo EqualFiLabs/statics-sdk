@@ -155,6 +155,16 @@ describe("range gauge ABI", () => {
       errorName: "MinimumRemainingDurationNotMet",
       args: [3_600, 86_400],
     });
+
+    const capacityError = encodeErrorResult({
+      abi: staticsRangeGaugeAbi,
+      errorName: "RewardBudgetExceedsIndexCapacity",
+      args: [100n, 1n, 100n],
+    });
+    expect(decodeErrorResult({ abi: staticsRangeGaugeAbi, data: capacityError })).toMatchObject({
+      errorName: "RewardBudgetExceedsIndexCapacity",
+      args: [100n, 1n, 100n],
+    });
   });
 });
 
@@ -206,6 +216,17 @@ describe("range gauge calldata", () => {
     expect(decodedName(buildRebalanceRangeLiquidityCall(1n, poolId, rebalance))).toBe("rebalanceLiquidity");
     expect(decodedName(buildExitRangeLiquidityCall(1n, poolId, 1n, 2n, 9_999n))).toBe("exitLiquidity");
     expect(() => buildProvideRangeLiquidityCall(1n, { ...provide, tickUpper: -120 })).toThrow(/tickLower/);
+    expect(() => buildProvideRangeLiquidityCall(1n, { ...provide, liquidity: 0n })).toThrow(/greater than zero/);
+    expect(() => buildProvideRangeLiquidityCall(1n, { ...provide, liquidity: 1n << 127n })).toThrow(/out of range/);
+    expect(() => buildIncreaseRangeLiquidityCall(1n, poolId, { ...increase, liquidity: 0n })).toThrow(
+      /greater than zero/,
+    );
+    expect(() => buildDecreaseRangeLiquidityCall(1n, poolId, { ...decrease, liquidity: 1n << 127n })).toThrow(
+      /out of range/,
+    );
+    expect(() => buildRebalanceRangeLiquidityCall(1n, poolId, { ...rebalance, liquidity: 0n })).toThrow(
+      /greater than zero/,
+    );
   });
 
   it("builds independent reward and recovery calls", () => {
