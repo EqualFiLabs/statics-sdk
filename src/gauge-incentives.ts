@@ -2,12 +2,14 @@ import {
   decodeFunctionResult,
   encodeFunctionData,
   parseAbi,
+  type Address,
   type ContractEventArgs,
   type Hex,
 } from "viem";
 
 export const MAX_GAUGE_ALLOCATIONS_PER_POSITION = 16;
 export const MAX_WEEKLY_GAUGE_RELEASE_BPS = 1_000;
+export const GAUGE_ALLOCATOR_CLAIM_WINDOW_EPOCHS = 26n;
 
 export type GaugeAllocation = {
   poolId: Hex;
@@ -61,6 +63,29 @@ export type GaugeTopTenPreview = {
   stalePool: Hex;
 };
 
+export type GaugeAllocatorReward = {
+  asset: Address;
+  eligibilityVersion: Hex;
+  finalized: boolean;
+  expired: boolean;
+  fundedAt: number;
+  expiresAt: number;
+  funded: bigint;
+  totalWeight: bigint;
+  distributable: bigint;
+  remainingLiability: bigint;
+};
+
+export type GaugeAllocatorClaimPreview = {
+  slot: number;
+  asset: Address;
+  allocation: bigint;
+  amount: bigint;
+  finalized: boolean;
+  claimed: boolean;
+  expired: boolean;
+};
+
 export const staticsGaugeIncentivesAbi = parseAbi([
   "function fundGaugeReserve(uint256 amount) returns (uint256 received)",
   "function setGaugeAllocations(uint256 positionId,bytes32[] poolIds,uint256[] amounts)",
@@ -68,6 +93,9 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "function refreshGaugePoolWeight(bytes32 poolId) returns (uint256 removedWeight)",
   "function scheduleGaugeReleaseBps(uint16 releaseBps)",
   "function syncGaugeAllocationsAfterStakeLoss(uint256 positionId,uint256 remainingStake)",
+  "function finalizeGaugeAllocatorReward(bytes32 poolId,uint8 slot,uint64 epoch) returns (uint256 distributable)",
+  "function claimGaugeAllocatorRewards(uint256 positionId,bytes32 poolId,uint64 epoch,uint8[] slots,uint256[] minimumAmounts,address receiver) returns (uint256[] received)",
+  "function expireGaugeAllocatorReward(bytes32 poolId,uint8 slot,uint64 epoch) returns (uint256 amount)",
   "function currentGaugeEpoch() view returns (uint64 epoch)",
   "function gaugeEpochAt(uint256 timestamp) pure returns (uint64 epoch)",
   "function gaugeReserve() view returns ((uint16 releaseBps,uint16 pendingReleaseBps,uint64 pendingReleaseEpoch,uint64 deferredMaturityEpoch,uint256 available,uint256 deferred,uint256 committed) state)",
@@ -77,6 +105,10 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "function previewGaugeTopTen() view returns (bytes32[] pools,uint256[] weights,bool stale,bytes32 stalePool)",
   "function maxGaugeAllocationsPerPosition() pure returns (uint256)",
   "function maxWeeklyGaugeReleaseBps() pure returns (uint16)",
+  "function gaugeAllocatorReward(bytes32 poolId,uint8 slot,uint64 epoch) view returns ((address asset,bytes32 eligibilityVersion,bool finalized,bool expired,uint40 fundedAt,uint40 expiresAt,uint256 funded,uint256 totalWeight,uint256 distributable,uint256 remainingLiability) state)",
+  "function gaugePositionAllocationAt(uint256 positionId,bytes32 poolId,uint64 epoch) view returns (uint256 amount,bytes32 eligibilityVersion)",
+  "function previewGaugeAllocatorRewards(uint256 positionId,bytes32 poolId,uint64 epoch,uint8[] slots) view returns ((uint8 slot,address asset,uint256 allocation,uint256 amount,bool finalized,bool claimed,bool expired)[] rewards)",
+  "function gaugeAllocatorClaimWindow() pure returns (uint64 epochs)",
   "event GaugeReserveFunded(address indexed funder,uint256 amount,uint64 indexed maturityEpoch)",
   "event GaugeReleaseBpsScheduled(uint16 releaseBps,uint64 indexed effectiveEpoch)",
   "event PositionGaugeAllocationsScheduled(uint256 indexed positionId,uint64 indexed effectiveEpoch,uint256 totalAllocated)",
@@ -84,6 +116,9 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "event GaugePoolWeightRefreshed(bytes32 indexed poolId,bytes32 previousVersion,bytes32 currentVersion,uint256 removedWeight)",
   "event GaugeEpochFinalized(uint64 indexed epoch,uint40 activatedAt,uint40 finish,uint16 releaseBps,uint256 nominalBudget,uint256 committedBudget,uint256 totalWeight,uint8 winnerCount)",
   "event ProtocolGaugeRewardCommitted(uint64 indexed epoch,bytes32 indexed poolId,uint256 weight,uint256 budget)",
+  "event GaugeAllocatorRewardFinalized(bytes32 indexed poolId,uint8 indexed slot,uint64 indexed epoch,address asset,uint256 distributable,uint256 totalWeight,uint40 expiresAt)",
+  "event GaugeAllocatorRewardClaimed(uint256 indexed positionId,bytes32 indexed poolId,uint64 indexed epoch,uint8 slot,address asset,address receiver,uint256 debited,uint256 received)",
+  "event GaugeAllocatorRewardExpired(bytes32 indexed poolId,uint8 indexed slot,uint64 indexed epoch,address asset,uint256 amount)",
   "error InvalidGaugeFundingAmount()",
   "error IncompatibleGaugeTokenTransfer(uint256 requested,uint256 received)",
   "error GaugeAllocationLengthMismatch()",
@@ -95,6 +130,18 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "error StaleGaugePoolWeight(bytes32 poolId,bytes32 storedVersion,bytes32 currentVersion)",
   "error GaugePoolWeightCurrent(bytes32 poolId)",
   "error GaugeSelfCallOnly(address caller)",
+  "error InvalidGaugeAllocatorSlot(bytes32 poolId,uint8 slot)",
+  "error GaugeAllocatorRewardNotFound(bytes32 poolId,uint8 slot,uint64 epoch)",
+  "error GaugeAllocatorEpochActive(uint64 epoch,uint40 finish,uint40 currentTime)",
+  "error GaugeAllocatorRewardNotFinalized(bytes32 poolId,uint8 slot,uint64 epoch)",
+  "error GaugeAllocatorRewardAlreadyClaimed(uint256 positionId,bytes32 poolId,uint8 slot,uint64 epoch)",
+  "error GaugeAllocatorClaimExpired(bytes32 poolId,uint8 slot,uint64 epoch,uint40 expiresAt)",
+  "error GaugeAllocatorClaimWindowActive(bytes32 poolId,uint8 slot,uint64 epoch,uint40 expiresAt,uint40 currentTime)",
+  "error GaugeAllocatorLiabilityUnderflow(bytes32 poolId,uint8 slot,uint64 epoch,uint256 liability,uint256 amount)",
+  "error GaugeAllocatorClaimLengthMismatch()",
+  "error DuplicateGaugeAllocatorSlot(uint8 slot)",
+  "error InvalidGaugeAllocatorReceiver(address receiver)",
+  "error GaugeAllocatorAmountBelowMinimum(address asset,uint256 received,uint256 minimum)",
   "error GaugeReserveAlreadyInitialized()",
   "error InvalidGaugeReleaseBps(uint256 releaseBps)",
   "error GaugeReserveUnderflow(uint256 requested,uint256 available)",
@@ -109,7 +156,10 @@ export type GaugeIncentiveEventName =
   | "PositionGaugeAllocationsClearedByStakeLoss"
   | "GaugePoolWeightRefreshed"
   | "GaugeEpochFinalized"
-  | "ProtocolGaugeRewardCommitted";
+  | "ProtocolGaugeRewardCommitted"
+  | "GaugeAllocatorRewardFinalized"
+  | "GaugeAllocatorRewardClaimed"
+  | "GaugeAllocatorRewardExpired";
 
 export type GaugeIncentiveEventArgs<Name extends GaugeIncentiveEventName> =
   ContractEventArgs<typeof staticsGaugeIncentivesAbi, Name>;
@@ -159,6 +209,45 @@ export function buildScheduleGaugeReleaseBpsCall(releaseBps: number): Hex {
   });
 }
 
+function validateAllocatorSlot(slot: number): number {
+  if (!Number.isInteger(slot) || slot < 1 || slot > 4) throw new Error("allocator slot must be between 1 and 4");
+  return slot;
+}
+
+export function buildFinalizeGaugeAllocatorRewardCall(poolId: Hex, slot: number, epoch: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "finalizeGaugeAllocatorReward",
+    args: [poolId, validateAllocatorSlot(slot), epoch],
+  });
+}
+
+export function buildClaimGaugeAllocatorRewardsCall(
+  positionId: bigint,
+  poolId: Hex,
+  epoch: bigint,
+  slots: readonly number[],
+  minimumAmounts: readonly bigint[],
+  receiver: Address,
+): Hex {
+  if (slots.length !== minimumAmounts.length) throw new Error("slots and minimumAmounts length mismatch");
+  const validatedSlots = slots.map(validateAllocatorSlot);
+  if (new Set(validatedSlots).size !== validatedSlots.length) throw new Error("duplicate allocator slot");
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "claimGaugeAllocatorRewards",
+    args: [positionId, poolId, epoch, validatedSlots, minimumAmounts, receiver],
+  });
+}
+
+export function buildExpireGaugeAllocatorRewardCall(poolId: Hex, slot: number, epoch: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "expireGaugeAllocatorReward",
+    args: [poolId, validateAllocatorSlot(slot), epoch],
+  });
+}
+
 export function buildCurrentGaugeEpochCall(): Hex {
   return encodeFunctionData({ abi: staticsGaugeIncentivesAbi, functionName: "currentGaugeEpoch" });
 }
@@ -199,6 +288,40 @@ export function buildMaxWeeklyGaugeReleaseBpsCall(): Hex {
   return encodeFunctionData({ abi: staticsGaugeIncentivesAbi, functionName: "maxWeeklyGaugeReleaseBps" });
 }
 
+export function buildGaugeAllocatorRewardCall(poolId: Hex, slot: number, epoch: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "gaugeAllocatorReward",
+    args: [poolId, validateAllocatorSlot(slot), epoch],
+  });
+}
+
+export function buildGaugePositionAllocationAtCall(positionId: bigint, poolId: Hex, epoch: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "gaugePositionAllocationAt",
+    args: [positionId, poolId, epoch],
+  });
+}
+
+export function buildPreviewGaugeAllocatorRewardsCall(
+  positionId: bigint,
+  poolId: Hex,
+  epoch: bigint,
+  slots: readonly number[],
+): Hex {
+  const validatedSlots = slots.map(validateAllocatorSlot);
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "previewGaugeAllocatorRewards",
+    args: [positionId, poolId, epoch, validatedSlots],
+  });
+}
+
+export function buildGaugeAllocatorClaimWindowCall(): Hex {
+  return encodeFunctionData({ abi: staticsGaugeIncentivesAbi, functionName: "gaugeAllocatorClaimWindow" });
+}
+
 export function decodeGaugeReserveResult(data: Hex): GaugeReserve {
   return decodeFunctionResult({ abi: staticsGaugeIncentivesAbi, functionName: "gaugeReserve", data });
 }
@@ -227,4 +350,28 @@ export function decodeGaugeTopTenPreviewResult(data: Hex): GaugeTopTenPreview {
     data,
   });
   return { pools, weights, stale, stalePool };
+}
+
+export function decodeGaugeAllocatorRewardResult(data: Hex): GaugeAllocatorReward {
+  return decodeFunctionResult({ abi: staticsGaugeIncentivesAbi, functionName: "gaugeAllocatorReward", data });
+}
+
+export function decodeGaugePositionAllocationAtResult(data: Hex): {
+  amount: bigint;
+  eligibilityVersion: Hex;
+} {
+  const [amount, eligibilityVersion] = decodeFunctionResult({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "gaugePositionAllocationAt",
+    data,
+  });
+  return { amount, eligibilityVersion };
+}
+
+export function decodeGaugeAllocatorRewardsPreviewResult(data: Hex): readonly GaugeAllocatorClaimPreview[] {
+  return decodeFunctionResult({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "previewGaugeAllocatorRewards",
+    data,
+  });
 }

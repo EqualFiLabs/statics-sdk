@@ -12,21 +12,31 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_GAUGE_ALLOCATIONS_PER_POSITION,
   MAX_WEEKLY_GAUGE_RELEASE_BPS,
+  buildClaimGaugeAllocatorRewardsCall,
   buildCheckpointGaugeEpochCall,
   buildCurrentGaugeEpochCall,
   buildFundGaugeReserveCall,
+  buildFinalizeGaugeAllocatorRewardCall,
+  buildExpireGaugeAllocatorRewardCall,
+  buildGaugeAllocatorClaimWindowCall,
+  buildGaugeAllocatorRewardCall,
   buildGaugeEpochAtCall,
   buildGaugeEpochCall,
   buildGaugePoolWeightCall,
   buildGaugePositionAllocationsCall,
+  buildGaugePositionAllocationAtCall,
   buildGaugeReserveCall,
   buildMaxGaugeAllocationsPerPositionCall,
   buildMaxWeeklyGaugeReleaseBpsCall,
   buildPreviewGaugeTopTenCall,
+  buildPreviewGaugeAllocatorRewardsCall,
   buildRefreshGaugePoolWeightCall,
   buildScheduleGaugeReleaseBpsCall,
   buildSetGaugeAllocationsCall,
   decodeGaugeEpochResult,
+  decodeGaugeAllocatorRewardResult,
+  decodeGaugeAllocatorRewardsPreviewResult,
+  decodeGaugePositionAllocationAtResult,
   decodeGaugePoolWeightResult,
   decodeGaugePositionAllocationsResult,
   decodeGaugeReserveResult,
@@ -48,6 +58,9 @@ const functionNames = [
   "refreshGaugePoolWeight",
   "scheduleGaugeReleaseBps",
   "syncGaugeAllocationsAfterStakeLoss",
+  "finalizeGaugeAllocatorReward",
+  "claimGaugeAllocatorRewards",
+  "expireGaugeAllocatorReward",
   "currentGaugeEpoch",
   "gaugeEpochAt",
   "gaugeReserve",
@@ -57,6 +70,10 @@ const functionNames = [
   "previewGaugeTopTen",
   "maxGaugeAllocationsPerPosition",
   "maxWeeklyGaugeReleaseBps",
+  "gaugeAllocatorReward",
+  "gaugePositionAllocationAt",
+  "previewGaugeAllocatorRewards",
+  "gaugeAllocatorClaimWindow",
 ] as const;
 
 function decodedName(data: Hex): string {
@@ -111,6 +128,27 @@ describe("gauge incentive calldata", () => {
     expect(decodedName(buildRefreshGaugePoolWeightCall(poolId))).toBe("refreshGaugePoolWeight");
     expect(decodedName(buildScheduleGaugeReleaseBpsCall(400))).toBe("scheduleGaugeReleaseBps");
     expect(() => buildScheduleGaugeReleaseBpsCall(MAX_WEEKLY_GAUGE_RELEASE_BPS + 1)).toThrow(/out of range/);
+    expect(decodedName(buildFinalizeGaugeAllocatorRewardCall(poolId, 2, 12n))).toBe(
+      "finalizeGaugeAllocatorReward",
+    );
+    expect(decodedName(buildExpireGaugeAllocatorRewardCall(poolId, 2, 12n))).toBe(
+      "expireGaugeAllocatorReward",
+    );
+    expect(() => buildFinalizeGaugeAllocatorRewardCall(poolId, 0, 12n)).toThrow(/allocator slot/);
+  });
+
+  it("builds bounded allocator claims", () => {
+    const claim = buildClaimGaugeAllocatorRewardsCall(7n, poolId, 12n, [1, 4], [10n, 20n], funder);
+    expect(decodeFunctionData({ abi: staticsGaugeIncentivesAbi, data: claim })).toMatchObject({
+      functionName: "claimGaugeAllocatorRewards",
+      args: [7n, poolId, 12n, [1, 4], [10n, 20n], funder],
+    });
+    expect(() => buildClaimGaugeAllocatorRewardsCall(7n, poolId, 12n, [1], [], funder)).toThrow(
+      /length mismatch/,
+    );
+    expect(() => buildClaimGaugeAllocatorRewardsCall(7n, poolId, 12n, [1, 1], [0n, 0n], funder)).toThrow(
+      /duplicate/,
+    );
   });
 
   it("builds bounded, unique position allocations", () => {
@@ -144,6 +182,14 @@ describe("gauge incentive calldata", () => {
     expect(decodedName(buildPreviewGaugeTopTenCall())).toBe("previewGaugeTopTen");
     expect(decodedName(buildMaxGaugeAllocationsPerPositionCall())).toBe("maxGaugeAllocationsPerPosition");
     expect(decodedName(buildMaxWeeklyGaugeReleaseBpsCall())).toBe("maxWeeklyGaugeReleaseBps");
+    expect(decodedName(buildGaugeAllocatorRewardCall(poolId, 2, 12n))).toBe("gaugeAllocatorReward");
+    expect(decodedName(buildGaugePositionAllocationAtCall(7n, poolId, 12n))).toBe(
+      "gaugePositionAllocationAt",
+    );
+    expect(decodedName(buildPreviewGaugeAllocatorRewardsCall(7n, poolId, 12n, [2]))).toBe(
+      "previewGaugeAllocatorRewards",
+    );
+    expect(decodedName(buildGaugeAllocatorClaimWindowCall())).toBe("gaugeAllocatorClaimWindow");
   });
 });
 
@@ -226,5 +272,44 @@ describe("gauge incentive views", () => {
       stale: false,
       stalePool: zeroPoolId,
     });
+  });
+
+  it("decodes allocator reward and historical allocation state", () => {
+    const reward = {
+      asset: funder,
+      eligibilityVersion: version,
+      finalized: true,
+      expired: false,
+      fundedAt: 1_000,
+      expiresAt: 2_000,
+      funded: 100n,
+      totalWeight: 50n,
+      distributable: 90n,
+      remainingLiability: 40n,
+    } as const;
+    const rewardResult = encodeFunctionResult({
+      abi: staticsGaugeIncentivesAbi,
+      functionName: "gaugeAllocatorReward",
+      result: reward,
+    });
+    expect(decodeGaugeAllocatorRewardResult(rewardResult)).toEqual(reward);
+
+    const allocationResult = encodeFunctionResult({
+      abi: staticsGaugeIncentivesAbi,
+      functionName: "gaugePositionAllocationAt",
+      result: [50n, version],
+    });
+    expect(decodeGaugePositionAllocationAtResult(allocationResult)).toEqual({
+      amount: 50n,
+      eligibilityVersion: version,
+    });
+
+    const preview = [{ slot: 2, asset: funder, allocation: 50n, amount: 90n, finalized: true, claimed: false, expired: false }];
+    const previewResult = encodeFunctionResult({
+      abi: staticsGaugeIncentivesAbi,
+      functionName: "previewGaugeAllocatorRewards",
+      result: preview,
+    });
+    expect(decodeGaugeAllocatorRewardsPreviewResult(previewResult)).toEqual(preview);
   });
 });

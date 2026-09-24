@@ -10,6 +10,7 @@ import {
 const MAX_UINT40 = (1n << 40n) - 1n;
 const MAX_INT128 = (1n << 127n) - 1n;
 const MAX_REWARD_SLOT = 4;
+const BPS = 10_000;
 const MIN_INT24 = -(1 << 23);
 const MAX_INT24 = (1 << 23) - 1;
 
@@ -61,11 +62,13 @@ export type RangeGaugePoolRewardConfig = {
   initialized: boolean;
   slotCount: number;
   assets: readonly [Address, Address, Address, Address, Address];
+  allocatorShareBps: readonly [number, number, number, number, number];
 };
 
 export type RangeGaugePool = {
   initialized: boolean;
   stopped: boolean;
+  stoppedAt: number;
   referenceTick: number;
   activeGaugeLiquidity: bigint;
   managedLegCount: bigint;
@@ -163,7 +166,8 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function setGaugeRewardAssetAllowed(address asset,bool allowed)",
   "function setGaugeRewardDuration(uint40 duration)",
   "function appendPoolRewardAsset(bytes32 poolId,address asset) returns (uint8 slot)",
-  "function fundPoolReward(bytes32 poolId,uint8 slot,uint256 amount,uint40 minRemainingDuration) returns (uint256 received)",
+  "function setPoolRewardAllocatorShare(bytes32 poolId,uint8 slot,uint16 allocatorShareBps)",
+  "function fundPoolReward(bytes32 poolId,uint8 slot,uint256 amount,uint40 minRemainingDuration,uint16 expectedAllocatorShareBps) returns (uint256 received)",
   "function installLiquidityManager(address manager)",
   "function replaceLiquidityManager(address newManager)",
   "function provideLiquidity(uint256 positionId,(bytes32 poolId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256 amount0Maximum,uint256 amount1Maximum,uint256 deadline) params) returns ((uint256 posmTokenId,uint128 liquidity,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement)",
@@ -179,8 +183,8 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function reconcilePoolRewardSurplus(bytes32 poolId,uint8 slot) returns (uint256 amount)",
   "function gaugeRewardDuration() view returns (uint40 duration)",
   "function gaugeRewardAssetAllowed(address asset) view returns (bool allowed)",
-  "function poolRewardConfig(bytes32 poolId) view returns ((bool initialized,uint8 slotCount,address[5] assets) config)",
-  "function gaugePool(bytes32 poolId) view returns ((bool initialized,bool stopped,int24 referenceTick,uint128 activeGaugeLiquidity,uint64 managedLegCount,uint64 unresolvedLegCount) pool)",
+  "function poolRewardConfig(bytes32 poolId) view returns ((bool initialized,uint8 slotCount,address[5] assets,uint16[5] allocatorShareBps) config)",
+  "function gaugePool(bytes32 poolId) view returns ((bool initialized,bool stopped,uint40 stoppedAt,int24 referenceTick,uint128 activeGaugeLiquidity,uint64 managedLegCount,uint64 unresolvedLegCount) pool)",
   "function poolRewardStream(bytes32 poolId,uint8 slot) view returns ((bool assigned,uint8 slot,address asset,uint64 protocolEpoch,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 periodRecycled,uint256 globalIndexRay,uint256 indexRemainder,uint256 indexedLiability,uint256 claimLiability,uint256 indexCapacityUsed) stream)",
   "function poolRewardCustodyAccount(bytes32 poolId,uint8 slot) view returns (bytes32 account,bool assigned)",
   "function gaugeBoundary(bytes32 poolId,int24 tick) view returns ((uint128 grossLiquidity,int128 netLiquidity,uint256[5] rewardOutsideRay) boundary)",
@@ -193,7 +197,9 @@ export const staticsRangeGaugeAbi = parseAbi([
   "event GaugeRewardAssetAllowedSet(address indexed asset,bool allowed)",
   "event GaugeRewardDurationSet(uint40 duration)",
   "event PoolRewardAssetAppended(bytes32 indexed poolId,address indexed asset,uint8 indexed slot)",
-  "event PoolRewardFunded(bytes32 indexed poolId,address indexed asset,address indexed funder,uint8 slot,uint256 requested,uint256 received,uint40 periodFinish)",
+  "event PoolRewardAllocatorShareSet(bytes32 indexed poolId,uint8 indexed slot,uint16 allocatorShareBps)",
+  "event PoolRewardFunded(bytes32 indexed poolId,address indexed asset,address indexed funder,uint8 slot,uint256 received,uint256 lpAmount,uint40 periodFinish)",
+  "event PoolAllocatorRewardFunded(bytes32 indexed poolId,address indexed asset,address indexed funder,uint8 slot,uint256 allocatorAmount,uint64 allocatorEpoch)",
   "event ManagedLiquidityProvided(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
   "event ManagedLiquidityAttached(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
   "event ManagedLiquidityChanged(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,uint128 liquidity)",
@@ -214,6 +220,9 @@ export const staticsRangeGaugeAbi = parseAbi([
   "error GaugeRewardAssetNotAssigned(bytes32 poolId,address asset)",
   "error GaugeRewardSlotNotAssigned(bytes32 poolId,uint8 slot)",
   "error ProtocolRewardSlotReserved(bytes32 poolId)",
+  "error InvalidAllocatorShareBps(uint256 allocatorShareBps)",
+  "error AllocatorShareChanged(uint16 expectedAllocatorShareBps,uint16 actualAllocatorShareBps)",
+  "error GaugeAllocatorPoolIneligible(bytes32 poolId)",
   "error MinimumRemainingDurationNotMet(uint40 available,uint40 minimum)",
   "error RewardBudgetExceedsIndexCapacity(uint256 committedBudget,uint256 received,uint256 maximumBudget)",
   "error InvalidReceiver(address receiver)",
@@ -238,7 +247,9 @@ export type RangeGaugeEventName =
   | "GaugeRewardAssetAllowedSet"
   | "GaugeRewardDurationSet"
   | "PoolRewardAssetAppended"
+  | "PoolRewardAllocatorShareSet"
   | "PoolRewardFunded"
+  | "PoolAllocatorRewardFunded"
   | "ManagedLiquidityProvided"
   | "ManagedLiquidityAttached"
   | "ManagedLiquidityChanged"
@@ -326,12 +337,31 @@ export function buildAppendPoolRewardAssetCall(poolId: Hex, asset: Address): Hex
   return encodeFunctionData({ abi: staticsRangeGaugeAbi, functionName: "appendPoolRewardAsset", args: [poolId, asset] });
 }
 
+export function buildSetPoolRewardAllocatorShareCall(poolId: Hex, slot: number, allocatorShareBps: number): Hex {
+  if (!Number.isInteger(allocatorShareBps) || allocatorShareBps < 0 || allocatorShareBps > BPS) {
+    throw new Error("allocatorShareBps is out of range");
+  }
+  return encodeFunctionData({
+    abi: staticsRangeGaugeAbi,
+    functionName: "setPoolRewardAllocatorShare",
+    args: [poolId, validateRewardSlot(slot, false), allocatorShareBps],
+  });
+}
+
 export function buildFundPoolRewardCall(
   poolId: Hex,
   slot: number,
   amount: bigint,
   minRemainingDuration: bigint,
+  expectedAllocatorShareBps: number,
 ): Hex {
+  if (
+    !Number.isInteger(expectedAllocatorShareBps) ||
+    expectedAllocatorShareBps < 0 ||
+    expectedAllocatorShareBps > BPS
+  ) {
+    throw new Error("expectedAllocatorShareBps is out of range");
+  }
   return encodeFunctionData({
     abi: staticsRangeGaugeAbi,
     functionName: "fundPoolReward",
@@ -340,6 +370,7 @@ export function buildFundPoolRewardCall(
       validateRewardSlot(slot, false),
       amount,
       Number(validateUint(minRemainingDuration, MAX_UINT40, "minRemainingDuration")),
+      expectedAllocatorShareBps,
     ],
   });
 }

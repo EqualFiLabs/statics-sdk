@@ -41,6 +41,7 @@ import {
   buildReplaceRangeGaugeLiquidityManagerCall,
   buildSetGaugeRewardAssetAllowedCall,
   buildSetGaugeRewardDurationCall,
+  buildSetPoolRewardAllocatorShareCall,
   decodePositionGaugePoolsResult,
   decodePreviewRangeLpRewardsResult,
   decodeRangeGaugeLpLegResult,
@@ -62,6 +63,7 @@ const functionNames = [
   "setGaugeRewardAssetAllowed",
   "setGaugeRewardDuration",
   "appendPoolRewardAsset",
+  "setPoolRewardAllocatorShare",
   "fundPoolReward",
   "installLiquidityManager",
   "replaceLiquidityManager",
@@ -145,7 +147,7 @@ describe("range gauge ABI", () => {
       result: [2, 100n, 99n, 604_800],
     });
     const event = decodeEventLog({ abi: staticsRangeGaugeAbi, eventName: "PoolRewardFunded", topics, data });
-    expect(event.args).toMatchObject({ poolId, asset, funder: receiver, slot: 2, requested: 100n, received: 99n });
+    expect(event.args).toMatchObject({ poolId, asset, funder: receiver, slot: 2, received: 100n, lpAmount: 99n });
 
     const encodedError = encodeErrorResult({
       abi: staticsRangeGaugeAbi,
@@ -174,16 +176,21 @@ describe("range gauge calldata", () => {
     expect(decodedName(buildSetGaugeRewardAssetAllowedCall(asset, true))).toBe("setGaugeRewardAssetAllowed");
     expect(decodedName(buildSetGaugeRewardDurationCall(604_800n))).toBe("setGaugeRewardDuration");
     expect(decodedName(buildAppendPoolRewardAssetCall(poolId, asset))).toBe("appendPoolRewardAsset");
+    expect(decodedName(buildSetPoolRewardAllocatorShareCall(poolId, 2, 2_500))).toBe(
+      "setPoolRewardAllocatorShare",
+    );
 
     const funding = decodeFunctionData({
       abi: staticsRangeGaugeAbi,
-      data: buildFundPoolRewardCall(poolId, 2, 1_000n, 86_400n),
+      data: buildFundPoolRewardCall(poolId, 2, 1_000n, 86_400n, 2_500),
     });
     expect(funding.functionName).toBe("fundPoolReward");
-    expect(funding.args).toEqual([poolId, 2, 1_000n, 86_400]);
-    expect(() => buildFundPoolRewardCall(poolId, 0, 1n, 1n)).toThrow(/slot/);
-    expect(() => buildFundPoolRewardCall(poolId, 5, 1n, 1n)).toThrow(/slot/);
-    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n << 40n)).toThrow(/minRemainingDuration/);
+    expect(funding.args).toEqual([poolId, 2, 1_000n, 86_400, 2_500]);
+    expect(() => buildSetPoolRewardAllocatorShareCall(poolId, 2, 10_001)).toThrow(/allocatorShareBps/);
+    expect(() => buildFundPoolRewardCall(poolId, 0, 1n, 1n, 0)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 5, 1n, 1n, 0)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n << 40n, 0)).toThrow(/minRemainingDuration/);
+    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n, 10_001)).toThrow(/expectedAllocatorShareBps/);
   });
 
   it("builds the complete managed position lifecycle", () => {
