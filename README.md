@@ -203,6 +203,28 @@ basket's `flashFeeBps`.
 
 The package exports the Diamond liquidity and global-reward ABI plus hook,
 manager, PositionManager, and StateView fragments.
+
+### Public range gauges
+
+`staticsRangeGaugeAbi` is the frozen Diamond interface for managed public-pool
+PNFT liquidity. Its `RangeGauge*` types are deliberately separate from the
+permissioned venue position-manager types. The public gauge owns reward
+accounting while `StaticsLiquidityManager` holds the underlying Uniswap v4
+position on behalf of the Diamond.
+
+Use `buildPositionGaugePoolsCall` to page through every public PoolId attached
+to a PositionNFT, then read each leg with `buildRangeGaugeLpLegCall` and reward
+state with `buildPreviewRangeLpRewardsCall`. Read all pages at one block because
+exit and final reward resolution remove entries. `decodeRangeGaugeLpLegResult`
+adds a derived `claimOnly` flag when principal has exited but whole-token claims
+or fractional reward remainder still keep the leg unresolved.
+
+Pool reward funding is protected by the caller-selected
+`minRemainingDuration` in `buildFundPoolRewardCall`. Integrations should refresh
+the stream immediately before funding and choose the minimum remaining schedule
+they are willing to accept. A zero value deliberately opts out of that
+protection.
+
 `buildCreateBasketTransaction` requires one semantic
 constituent-per-BasketToken square-root price, creator-selected static native LP
 fee, tick spacing, paired-asset amount, and measured complete input cap per
