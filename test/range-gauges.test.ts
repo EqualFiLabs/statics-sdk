@@ -301,9 +301,9 @@ describe("range gauge discovery and previews", () => {
       periodEmitted: 3n,
       globalIndexRay: 30n,
       indexRemainder: 2n,
-      indexCapacityUsed: 3n,
       indexedLiability: 3n,
       claimLiability: 0n,
+      indexCapacityUsed: 3n,
     } as const;
     const result = encodeFunctionResult({
       abi: staticsRangeGaugeAbi,

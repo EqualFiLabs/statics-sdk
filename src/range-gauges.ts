@@ -82,9 +82,9 @@ export type RangeGaugeRewardStream = {
   periodEmitted: bigint;
   globalIndexRay: bigint;
   indexRemainder: bigint;
-  indexCapacityUsed: bigint;
   indexedLiability: bigint;
   claimLiability: bigint;
+  indexCapacityUsed: bigint;
 };
 
 export type RangeGaugeBoundary = {
@@ -178,7 +178,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function gaugeRewardAssetAllowed(address asset) view returns (bool allowed)",
   "function poolRewardConfig(bytes32 poolId) view returns ((bool initialized,uint8 slotCount,address[4] assets) config)",
   "function gaugePool(bytes32 poolId) view returns ((bool initialized,bool stopped,int24 referenceTick,uint128 activeGaugeLiquidity,uint64 managedLegCount,uint64 unresolvedLegCount) pool)",
-  "function poolRewardStream(bytes32 poolId,address asset) view returns ((bool assigned,uint8 slot,address asset,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 globalIndexRay,uint256 indexRemainder,uint256 indexCapacityUsed,uint256 indexedLiability,uint256 claimLiability) stream)",
+  "function poolRewardStream(bytes32 poolId,address asset) view returns ((bool assigned,uint8 slot,address asset,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 globalIndexRay,uint256 indexRemainder,uint256 indexedLiability,uint256 claimLiability,uint256 indexCapacityUsed) stream)",
   "function poolRewardCustodyAccount(bytes32 poolId,address asset) view returns (bytes32 account,bool assigned)",
   "function gaugeBoundary(bytes32 poolId,int24 tick) view returns ((uint128 grossLiquidity,int128 netLiquidity,uint256[4] rewardOutsideRay) boundary)",
   "function lpLeg(uint256 positionId,bytes32 poolId) view returns ((address manager,uint256 posmTokenId,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256[4] checkpointInsideRay,uint256[4] rewardRemainderRay,uint256[4] claimable) leg)",
