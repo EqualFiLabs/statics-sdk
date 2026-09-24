@@ -44,6 +44,7 @@ import {
   decodePositionGaugePoolsResult,
   decodePreviewRangeLpRewardsResult,
   decodeRangeGaugeLpLegResult,
+  decodeRangeGaugeRewardStreamResult,
   isRangeGaugeClaimOnlyLeg,
   staticsAbi,
   staticsLiquidityManagerAbi,
@@ -286,6 +287,30 @@ describe("range gauge discovery and previews", () => {
       assets: [asset, zeroAddress, zeroAddress, zeroAddress],
       amounts: [9n, 0n, 0n, 0n],
     });
+  });
+
+  it("decodes lifetime reward index capacity", () => {
+    const stream = {
+      assigned: true,
+      slot: 1,
+      asset,
+      periodStart: 1,
+      periodFinish: 2,
+      lastUpdate: 1,
+      periodBudget: 11n,
+      periodEmitted: 3n,
+      globalIndexRay: 30n,
+      indexRemainder: 2n,
+      indexCapacityUsed: 3n,
+      indexedLiability: 3n,
+      claimLiability: 0n,
+    } as const;
+    const result = encodeFunctionResult({
+      abi: staticsRangeGaugeAbi,
+      functionName: "poolRewardStream",
+      result: stream,
+    });
+    expect(decodeRangeGaugeRewardStreamResult(result)).toEqual(stream);
   });
 
   it("exposes claim-only state for exited legs with residual accounting", () => {
