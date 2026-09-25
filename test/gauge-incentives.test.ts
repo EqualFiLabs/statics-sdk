@@ -13,7 +13,9 @@ import {
   MAX_GAUGE_ALLOCATIONS_PER_POSITION,
   MAX_WEEKLY_GAUGE_RELEASE_BPS,
   buildClaimGaugeAllocatorRewardsCall,
+  buildCheckpointGaugePoolCall,
   buildCheckpointGaugeEpochCall,
+  buildCloseGaugeEpochCall,
   buildCurrentGaugeEpochCall,
   buildFundGaugeReserveCall,
   buildFinalizeGaugeAllocatorRewardCall,
@@ -28,9 +30,8 @@ import {
   buildGaugeReserveCall,
   buildMaxGaugeAllocationsPerPositionCall,
   buildMaxWeeklyGaugeReleaseBpsCall,
-  buildPreviewGaugeTopTenCall,
+  buildPreviewGaugePoolRewardCall,
   buildPreviewGaugeAllocatorRewardsCall,
-  buildRefreshGaugePoolWeightCall,
   buildScheduleGaugeReleaseBpsCall,
   buildSetGaugeAllocationsCall,
   decodeGaugeEpochResult,
@@ -40,14 +41,13 @@ import {
   decodeGaugePoolWeightResult,
   decodeGaugePositionAllocationsResult,
   decodeGaugeReserveResult,
-  decodeGaugeTopTenPreviewResult,
+  decodeGaugePoolRewardResult,
   staticsAbi,
   staticsGaugeIncentivesAbi,
 } from "../src/index.js";
 
 const poolId = `0x${"11".repeat(32)}` as Hex;
 const secondPoolId = `0x${"22".repeat(32)}` as Hex;
-const zeroPoolId = `0x${"00".repeat(32)}` as Hex;
 const version = `0x${"33".repeat(32)}` as Hex;
 const funder = "0x0000000000000000000000000000000000000011" as Address;
 
@@ -55,7 +55,8 @@ const functionNames = [
   "fundGaugeReserve",
   "setGaugeAllocations",
   "checkpointGaugeEpoch",
-  "refreshGaugePoolWeight",
+  "checkpointGaugePool",
+  "closeGaugeEpoch",
   "scheduleGaugeReleaseBps",
   "syncGaugeAllocationsAfterStakeLoss",
   "finalizeGaugeAllocatorReward",
@@ -67,7 +68,7 @@ const functionNames = [
   "gaugePoolWeight",
   "gaugePositionAllocations",
   "gaugeEpoch",
-  "previewGaugeTopTen",
+  "previewGaugePoolReward",
   "maxGaugeAllocationsPerPosition",
   "maxWeeklyGaugeReleaseBps",
   "gaugeAllocatorReward",
@@ -125,7 +126,8 @@ describe("gauge incentive calldata", () => {
     expect(decodedName(buildFundGaugeReserveCall(1_000n))).toBe("fundGaugeReserve");
     expect(() => buildFundGaugeReserveCall(0n)).toThrow(/greater than zero/);
     expect(decodedName(buildCheckpointGaugeEpochCall())).toBe("checkpointGaugeEpoch");
-    expect(decodedName(buildRefreshGaugePoolWeightCall(poolId))).toBe("refreshGaugePoolWeight");
+    expect(decodedName(buildCheckpointGaugePoolCall(poolId))).toBe("checkpointGaugePool");
+    expect(decodedName(buildCloseGaugeEpochCall(12n))).toBe("closeGaugeEpoch");
     expect(decodedName(buildScheduleGaugeReleaseBpsCall(400))).toBe("scheduleGaugeReleaseBps");
     expect(() => buildScheduleGaugeReleaseBpsCall(MAX_WEEKLY_GAUGE_RELEASE_BPS + 1)).toThrow(/out of range/);
     expect(decodedName(buildFinalizeGaugeAllocatorRewardCall(poolId, 2, 12n))).toBe(
@@ -179,7 +181,7 @@ describe("gauge incentive calldata", () => {
     expect(decodedName(buildGaugePoolWeightCall(poolId))).toBe("gaugePoolWeight");
     expect(decodedName(buildGaugePositionAllocationsCall(7n))).toBe("gaugePositionAllocations");
     expect(decodedName(buildGaugeEpochCall(12n))).toBe("gaugeEpoch");
-    expect(decodedName(buildPreviewGaugeTopTenCall())).toBe("previewGaugeTopTen");
+    expect(decodedName(buildPreviewGaugePoolRewardCall(poolId, 12n))).toBe("previewGaugePoolReward");
     expect(decodedName(buildMaxGaugeAllocationsPerPositionCall())).toBe("maxGaugeAllocationsPerPosition");
     expect(decodedName(buildMaxWeeklyGaugeReleaseBpsCall())).toBe("maxWeeklyGaugeReleaseBps");
     expect(decodedName(buildGaugeAllocatorRewardCall(poolId, 2, 12n))).toBe("gaugeAllocatorReward");
@@ -234,25 +236,18 @@ describe("gauge incentive views", () => {
     });
   });
 
-  it("decodes committed epoch and top-ten preview state", () => {
-    const emptyPools = Array.from({ length: 10 }, () => zeroPoolId) as unknown as readonly [
-      Hex, Hex, Hex, Hex, Hex, Hex, Hex, Hex, Hex, Hex,
-    ];
-    const emptyAmounts = Array.from({ length: 10 }, () => 0n) as unknown as readonly [
-      bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
-    ];
+  it("decodes committed epoch and pool reward state", () => {
     const epoch = {
       finalized: true,
+      closed: false,
       releaseBps: 400,
-      winnerCount: 1,
       activatedAt: 1_000,
       finish: 2_000,
+      activationDeadline: 3_000,
       nominalBudget: 100n,
       committedBudget: 90n,
+      unactivatedBudget: 40n,
       totalWeight: 50n,
-      pools: [poolId, ...emptyPools.slice(1)] as typeof emptyPools,
-      weights: [50n, ...emptyAmounts.slice(1)] as typeof emptyAmounts,
-      budgets: [90n, ...emptyAmounts.slice(1)] as typeof emptyAmounts,
     } as const;
     const epochResult = encodeFunctionResult({
       abi: staticsGaugeIncentivesAbi,
@@ -261,17 +256,20 @@ describe("gauge incentive views", () => {
     });
     expect(decodeGaugeEpochResult(epochResult)).toEqual(epoch);
 
+    const poolReward = {
+      weight: 50n,
+      eligibilityVersion: version,
+      restrictionSequence: 7n,
+      budget: 90n,
+      resolved: true,
+      streamStarted: true,
+    } as const;
     const previewResult = encodeFunctionResult({
       abi: staticsGaugeIncentivesAbi,
-      functionName: "previewGaugeTopTen",
-      result: [[poolId], [50n], false, zeroPoolId],
+      functionName: "previewGaugePoolReward",
+      result: poolReward,
     });
-    expect(decodeGaugeTopTenPreviewResult(previewResult)).toEqual({
-      pools: [poolId],
-      weights: [50n],
-      stale: false,
-      stalePool: zeroPoolId,
-    });
+    expect(decodeGaugePoolRewardResult(previewResult)).toEqual(poolReward);
   });
 
   it("decodes allocator reward and historical allocation state", () => {
