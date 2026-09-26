@@ -2,6 +2,11 @@
   "name": "@statics-protocol/sdk",
   "version": "0.1.0",
   "description": "Quotes, calldata builders, and protocol pool interfaces for Statics",
+  "homepage": "https://github.com/EqualFiLabs/statics-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EqualFiLabs/statics-sdk.git"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
