@@ -10,8 +10,12 @@ import {
   type ContractEventArgs,
   type Hex,
 } from "viem";
+import { staticsRangeGaugeAbi } from "./range-gauges.js";
+import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
+export * from "./gauge-incentives.js";
+export * from "./range-gauges.js";
 
 export const BPS = 10_000n;
 export const SHARE_SCALE = 10n ** 18n;
@@ -1285,7 +1289,8 @@ export function allowsExposureIncrease(status: BasketStatus): boolean {
   return status === BasketStatus.Active;
 }
 
-export const staticsAbi = parseAbi([
+export const staticsAbi = [
+  ...parseAbi([
   "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
   "function redeem(uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
@@ -1488,7 +1493,6 @@ export const staticsAbi = parseAbi([
   "function setBasketFeeAllocation((uint16 polShareBps,uint16 basketStakerShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) allocation)",
   "function setGeneralFeeAllocation((uint16 polShareBps,uint16 staticsStakerShareBps,uint16 treasuryShareBps) allocation)",
   "function decommissionGeneralPool(bytes32 poolId) returns (uint256 amount0,uint256 amount1)",
-  "function replaceLiquidityManager(address newManager)",
   "function setPermanentLiquidityHarvester(address newHarvester)",
   "function harvestPermanentLiquidityFees(bytes32 poolId) returns (uint256 amount0,uint256 amount1)",
   "function protocolPool(bytes32 poolId) view returns ((bytes32 poolId,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,uint8 kind,bool decommissioned,uint256 basketId,address basketAsset,address creator,uint128 permanentLiquidity) pool)",
@@ -1523,8 +1527,6 @@ export const staticsAbi = parseAbi([
   "function permissionedTermsDigest(bytes32 poolId,(uint16 venueFeeBps,uint8 additionalRewardRestrictedMask,(uint16 creatorShareBps,uint16 treasuryShareBps,uint16 staticsStakerShareBps,uint16 basketStakerShareBps) allocation) economics,uint256 nonce,uint256 deadline,bytes32 agreementHash) view returns (bytes32 digest)",
   "function permissionedControllerReplacementDigest(bytes32 poolId,address currentController,address newController,uint256 nonce,uint256 deadline,bytes32 agreementHash) view returns (bytes32 digest)",
   "function liquidityIntegration() view returns (address poolManager,address hook,bool installed)",
-  "function installLiquidityManager(address manager)",
-  "function liquidityManager() view returns (address manager,bool installed)",
   "function unwindBasketLiquidity(uint256 basketId,address asset)",
   "function basketLiquidityUnwound(uint256 basketId,address asset) view returns (bool unwound)",
   "function borrowAndProvideLiquidity(uint256 positionId,uint256 basketId,uint256 sharesIn,(address asset,int24 tickLower,int24 tickUpper,uint256 liquidity,uint256 amount0Max,uint256 amount1Max,uint256 deadline)[] pools,address lpRecipient) returns (uint256 loanId,uint256[] v4TokenIds)",
@@ -1620,7 +1622,10 @@ export const staticsAbi = parseAbi([
   "event BasketRewardSettled(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,uint256 amount)",
   "event BasketRewardClaimed(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,address receiver,uint256 amount)",
   "event BasketRewardDustRouted(uint256 indexed basketId,address indexed asset,uint256 amount)",
-]);
+  ]),
+  ...staticsRangeGaugeAbi,
+  ...staticsGaugeIncentivesAbi,
+] as const;
 
 export const staticsFlashAssetBorrowerAbi = parseAbi([
   "function onStaticsFlashLoanAsset(address initiator,address asset,uint256 amount,uint256 fee,bytes data) returns (bytes32)",
@@ -1772,7 +1777,23 @@ export const staticsLiquidityManagerAbi = parseAbi([
   "function poolManager() view returns (address)",
   "function permit2() view returns (address)",
   "function mintUserPosition(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,int24 tickLower,int24 tickUpper,uint256 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline) request,address recipient,address refundRecipient) returns ((uint256 tokenId,uint256 spent0,uint256 received0,uint256 spent1,uint256 received1) movement,uint256 refund0,uint256 refund1)",
+  "function mintManagedPosition(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,int24 tickLower,int24 tickUpper,uint256 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline) request,address refundRecipient) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function attachManagedPosition(address owner,bytes32 expectedPoolId,uint256 tokenId) returns ((bytes32 poolId,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,int24 tickLower,int24 tickUpper,uint128 liquidity,address owner,address subscriber) state)",
+  "function inspectManagedPosition(uint256 tokenId) view returns ((bytes32 poolId,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,int24 tickLower,int24 tickUpper,uint128 liquidity,address owner,address subscriber) state)",
+  "function increaseManagedPosition((uint256 tokenId,uint128 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline,address receiver) request) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function decreaseManagedPosition((uint256 tokenId,uint128 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline,address receiver) request) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function collectManagedPositionFees((uint256 tokenId,uint128 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline,address receiver) request) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function burnManagedPosition((uint256 tokenId,uint128 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline,address receiver) request) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function exitManagedPosition((uint256 tokenId,uint128 liquidity,uint256 amount0Limit,uint256 amount1Limit,uint256 deadline,address receiver) request) returns ((uint256 tokenId,uint128 liquidityBefore,uint128 liquidityAfter,uint256 spent0,uint256 spent1,uint256 received0,uint256 received1,uint256 refund0,uint256 refund1) movement)",
+  "function recoverUnboundPosition(uint256 tokenId,address receiver)",
   "event UserPositionMinted(bytes32 indexed poolId,uint256 indexed tokenId,address recipient,address refundRecipient,uint256 spent0,uint256 spent1,uint256 refund0,uint256 refund1)",
+  "event ManagedPositionMinted(bytes32 indexed poolId,uint256 indexed tokenId,uint128 liquidity)",
+  "event ManagedPositionAttached(bytes32 indexed poolId,uint256 indexed tokenId,address indexed previousOwner)",
+  "event ManagedPositionLiquidityChanged(bytes32 indexed poolId,uint256 indexed tokenId,uint128 liquidityBefore,uint128 liquidityAfter)",
+  "event ManagedPositionFeesCollected(bytes32 indexed poolId,uint256 indexed tokenId,address indexed receiver,uint256 amount0,uint256 amount1)",
+  "event ManagedPositionBurned(bytes32 indexed poolId,uint256 indexed tokenId,address indexed receiver,uint256 amount0,uint256 amount1)",
+  "event ManagedPositionExited(bytes32 indexed poolId,uint256 indexed tokenId,address indexed receiver,uint256 amount0,uint256 amount1)",
+  "event UnboundPositionRecovered(uint256 indexed tokenId,address indexed receiver)",
 ]);
 
 export const v4PositionManagerReadAbi = parseAbi([
@@ -1922,7 +1943,15 @@ export type StaticsHookEventName =
 export type StaticsHookEventArgs<Name extends StaticsHookEventName> =
   ContractEventArgs<typeof staticsSwapFeeHookAbi, Name>;
 
-export type StaticsLiquidityManagerEventName = "UserPositionMinted";
+export type StaticsLiquidityManagerEventName =
+  | "UserPositionMinted"
+  | "ManagedPositionMinted"
+  | "ManagedPositionAttached"
+  | "ManagedPositionLiquidityChanged"
+  | "ManagedPositionFeesCollected"
+  | "ManagedPositionBurned"
+  | "ManagedPositionExited"
+  | "UnboundPositionRecovered";
 
 export type StaticsLiquidityManagerEventArgs<Name extends StaticsLiquidityManagerEventName> =
   ContractEventArgs<typeof staticsLiquidityManagerAbi, Name>;
