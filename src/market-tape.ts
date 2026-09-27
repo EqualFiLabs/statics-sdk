@@ -91,6 +91,7 @@ export const staticsMarketTapeAbi = parseAbi([
   "function marketObservationConfig(bytes32 poolId) view returns ((bool initialized,bool enabled,uint32 cadence,uint16 cardinality,uint16 cardinalityNext,uint64 stored,uint64 latestId,uint40 lastObservationTimestamp,uint256 failedWriteCount,uint256 lastFailedSequence) config)",
   "function marketObservation(bytes32 poolId,uint64 observationId) view returns ((uint40 timestamp,int24 tick,uint24 nativeLpFee,uint8 flags,uint256 sequence,int256 tickCumulative,uint256 externalVolume0,uint256 externalVolume1,uint256 internalVolume0,uint256 internalVolume1,uint256 staticsFees0,uint256 staticsFees1,uint256 externalSwapCount,uint256 internalSwapCount) observation)",
   "function observeMarket(bytes32 poolId,uint32[] secondsAgo) view returns ((uint40 timestamp,int24 tick,uint24 nativeLpFee,uint8 flags,uint256 sequence,int256 tickCumulative,uint256 externalVolume0,uint256 externalVolume1,uint256 internalVolume0,uint256 internalVolume1,uint256 staticsFees0,uint256 staticsFees1,uint256 externalSwapCount,uint256 internalSwapCount)[] observations)",
+  "event MarketSwapRecorded(bytes32 indexed poolId,uint256 indexed sequence,int256 poolDelta,uint256 staticsFeesPacked,int24 finalTick,uint24 nativeLpFee,uint8 flags)",
   "event MarketObservationConfigSet(bytes32 indexed poolId,bool enabled,uint32 cadence,uint16 cardinalityNext)",
   "event MarketObservationCommitted(bytes32 indexed poolId,uint64 indexed observationId,uint256 sequence)",
   "event MarketObservationWriteFailed(bytes32 indexed poolId,uint256 indexed sequence)",
@@ -109,6 +110,7 @@ export const staticsMarketTapeAbi = parseAbi([
 ]);
 
 export type MarketTapeEventName =
+  | "MarketSwapRecorded"
   | "MarketObservationConfigSet"
   | "MarketObservationCommitted"
   | "MarketObservationWriteFailed";

@@ -1,6 +1,7 @@
 import {
   decodeEventLog,
   decodeFunctionData,
+  encodeAbiParameters,
   encodeEventTopics,
   encodeFunctionResult,
   type Hex,
@@ -125,6 +126,37 @@ describe("market tape ABI", () => {
     expect(
       decodeEventLog({ abi: staticsMarketTapeAbi, eventName: "MarketObservationCommitted", topics, data }).args,
     ).toEqual({ poolId, observationId: 9n, sequence: 15n });
+  });
+
+  it("decodes canonical granular swap events", () => {
+    const sequence = 16n;
+    const poolDelta = -123n;
+    const staticsFeesPacked = 7n | (3n << 128n);
+    const topics = encodeEventTopics({
+      abi: staticsMarketTapeAbi,
+      eventName: "MarketSwapRecorded",
+      args: { poolId, sequence },
+    });
+    const data = encodeAbiParameters(
+      [
+        { type: "int256" },
+        { type: "uint256" },
+        { type: "int24" },
+        { type: "uint24" },
+        { type: "uint8" },
+      ],
+      [poolDelta, staticsFeesPacked, -120, 3_000, MARKET_FLAG_ZERO_FOR_ONE | MARKET_FLAG_EXACT_OUTPUT],
+    );
+
+    expect(decodeEventLog({ abi: staticsMarketTapeAbi, eventName: "MarketSwapRecorded", topics, data }).args).toEqual({
+      poolId,
+      sequence,
+      poolDelta,
+      staticsFeesPacked,
+      finalTick: -120,
+      nativeLpFee: 3_000,
+      flags: MARKET_FLAG_ZERO_FOR_ONE | MARKET_FLAG_EXACT_OUTPUT,
+    });
   });
 });
 
