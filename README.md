@@ -234,6 +234,10 @@ swap callback. These counters are gapless while the pool can trade. Saturated
 fields stop at `uint256.max` and are identified by the
 `MARKET_SAT_*` bitmask constants.
 
+`lastNativeLpFee` is the static fee rate in pips, not an exact cumulative
+native LP fee amount. Uniswap position accounting remains authoritative for
+native fee revenue.
+
 Historical observations are a best-effort analytics layer. Use
 `buildMarketObservationConfigCall` to inspect its cadence, retained capacity,
 failed-write count, and last failed canonical sequence. A failed observation
