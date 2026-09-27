@@ -225,6 +225,28 @@ the stream immediately before funding and choose the minimum remaining schedule
 they are willing to accept. A zero value deliberately opts out of that
 protection.
 
+### Market telemetry
+
+`staticsMarketTapeAbi` exposes canonical per-PoolId market counters and bounded
+historical observations. Canonical volume, Statics fees, swap counts, final
+tick, native LP fee, flags, and sequence are written inside the authenticated
+swap callback. These counters are gapless while the pool can trade. Saturated
+fields stop at `uint256.max` and are identified by the
+`MARKET_SAT_*` bitmask constants.
+
+Historical observations are a best-effort analytics layer. Use
+`buildMarketObservationConfigCall` to inspect its cadence, retained capacity,
+failed-write count, and last failed canonical sequence. A failed observation
+does not revert an otherwise valid swap, so consumers must use the canonical
+sequence and failure fields to detect gaps. Internal permissioned normalization
+volume is accounted separately from external economic volume and does not
+produce historical observations.
+
+Governance can configure the bounded observation ring with
+`buildSetMarketObservationConfigCall`. `recordMarketObservation` and
+`afterStaticsPoolSwap` are included in the exported ABIs for interface fidelity
+but are authenticated protocol callbacks, not integration entry points.
+
 `buildCreateBasketTransaction` requires one semantic
 constituent-per-BasketToken square-root price, creator-selected static native LP
 fee, tick spacing, paired-asset amount, and measured complete input cap per

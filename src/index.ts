@@ -12,9 +12,11 @@ import {
 } from "viem";
 import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
+import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
 export * from "./gauge-incentives.js";
+export * from "./market-tape.js";
 export * from "./range-gauges.js";
 
 export const BPS = 10_000n;
@@ -1625,6 +1627,8 @@ export const staticsAbi = [
   ]),
   ...staticsRangeGaugeAbi,
   ...staticsGaugeIncentivesAbi,
+  ...staticsMarketTapeAbi,
+  ...staticsSwapCallbackAbi,
 ] as const;
 
 export const staticsFlashAssetBorrowerAbi = parseAbi([
