@@ -101,8 +101,9 @@ import {
   buildSetBasketFeeAllocationCall,
   buildSetGeneralFeeAllocationCall,
   buildDecommissionGeneralPoolCall,
-  buildSetPermanentLiquidityHarvesterCall,
-  buildHarvestPermanentLiquidityFeesCall,
+  buildSetProtocolPoolMaintenanceConfigCall,
+  buildSettleProtocolPoolRevenueCall,
+  buildCompoundProtocolPoolPolCall,
   buildCreatePoolAuthorizationTypedData,
   buildPermissionedPoolCreationTypedData,
   buildPermissionedPoolTermsTypedData,
@@ -678,12 +679,25 @@ describe("Statics static basket quotes", () => {
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGeneralPoolCall(poolId) }).functionName)
       .toBe("decommissionGeneralPool");
+    const maintenance = {
+      revenueTipBps: 500n,
+      compoundTipBps: 100n,
+      twapWindow: 1_800n,
+      maxTickDeviation: 500n,
+    };
     expect(decodeFunctionData({
       abi: staticsAbi,
-      data: buildSetPermanentLiquidityHarvesterCall(receiver),
-    })).toEqual({ functionName: "setPermanentLiquidityHarvester", args: [receiver] });
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildHarvestPermanentLiquidityFeesCall(poolId) }))
-      .toEqual({ functionName: "harvestPermanentLiquidityFees", args: [poolId] });
+      data: buildSetProtocolPoolMaintenanceConfigCall(maintenance),
+    })).toEqual({
+      functionName: "setProtocolPoolMaintenanceConfig",
+      args: [{ revenueTipBps: 500, compoundTipBps: 100, twapWindow: 1_800, maxTickDeviation: 500 }],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSettleProtocolPoolRevenueCall(poolId, assetA) }))
+      .toEqual({ functionName: "settleProtocolPoolRevenue", args: [poolId, assetA] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildCompoundProtocolPoolPolCall(poolId) }))
+      .toEqual({ functionName: "compoundProtocolPoolPol", args: [poolId] });
+    expect(() => buildSetProtocolPoolMaintenanceConfigCall({ ...maintenance, revenueTipBps: 2_001n }))
+      .toThrow("revenue maintenance tip exceeds 2000 BPS");
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(poolId, assetA, receiver, 5n) }))
       .toEqual({ functionName: "claimCreatorRevenue", args: [poolId, assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
