@@ -76,6 +76,7 @@ import {
   buildSetGenesisRewardShareBpsCall,
   buildSetPositionCreationFeeCall,
   buildSetSingleAssetFlashFeeBpsCall,
+  buildSettlePublicSwapRewardsCall,
   buildActivateGenesisCall,
   buildCheckpointRewardAssetsCall,
   buildClaimCreatorRevenueCall,
@@ -1925,6 +1926,9 @@ describe("Statics unified calldata", () => {
       "rewardSelection",
       "rewardEligibilityDelay",
       "rewardEligibilityBucketSize",
+      "unfundedSwapRewards",
+      "fundedGlobalRewards",
+      "outstandingGlobalRewardLiability",
     ]) {
       expect(
         staticsAbi.some((entry) => entry.type === "function" && entry.name === functionName),
@@ -1956,6 +1960,12 @@ describe("Statics unified calldata", () => {
     expect(
       decodeFunctionData({ abi: staticsAbi, data: buildOptOutRewardAssetsCall(17n, [assetB]) }).functionName,
     ).toBe("optOutRewardAssets");
+    expect(
+      decodeFunctionData({ abi: staticsAbi, data: buildSettlePublicSwapRewardsCall(assetA, 25n) }),
+    ).toEqual({ functionName: "settlePublicSwapRewards", args: [assetA, 25n] });
+    for (const eventName of ["SwapRewardCrystallized", "SwapRewardFunded"]) {
+      expect(staticsAbi.some((entry) => entry.type === "event" && entry.name === eventName)).toBe(true);
+    }
     expect(allowsExposureIncrease(BasketStatus.Active)).toBe(true);
     expect(allowsExposureIncrease(BasketStatus.Quarantined)).toBe(false);
     expect(allowsExposureIncrease(BasketStatus.ExitOnly)).toBe(false);

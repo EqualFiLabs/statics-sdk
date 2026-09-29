@@ -1358,6 +1358,10 @@ export const staticsAbi = [
   "function totalStaked() view returns (uint256)",
   "function treasuryAccrued(address asset) view returns (uint256)",
   "function canAccrueStakerRewards(address asset) view returns (bool)",
+  "function unfundedSwapRewards(address asset) view returns (uint256)",
+  "function fundedGlobalRewards(address asset) view returns (uint256)",
+  "function outstandingGlobalRewardLiability(address asset) view returns (uint256)",
+  "function settlePublicSwapRewards(address asset,uint256 maximumAmount) returns (uint256 amount)",
   "function checkpointRewardAssets(address[] assets)",
   "function rewardBookNeedsCheckpoint(address asset) view returns (bool)",
   "function locked(uint256 positionId) view returns (bool)",
@@ -1606,6 +1610,8 @@ export const staticsAbi = [
   "event Staked(uint256 indexed positionId,address indexed payer,uint256 amount,uint256 totalPositionStake)",
   "event Unstaked(uint256 indexed positionId,address indexed receiver,uint256 amount,uint256 totalPositionStake)",
   "event GlobalFeeAccrued(address indexed asset,uint256 grossFee,uint256 stakerAmount,uint256 treasuryAmount,uint256 indexRay)",
+  "event SwapRewardCrystallized(address indexed asset,uint256 amount,uint256 eligibleWeight,uint256 indexRay,uint256 unfundedAmount)",
+  "event SwapRewardFunded(address indexed asset,uint256 amount,uint256 unfundedAmount)",
   "event RewardClaimed(uint256 indexed positionId,address indexed receiver,address indexed asset,uint256 amount)",
   "event TreasuryFeesDistributed(address indexed asset,address indexed treasury,uint256 amount)",
   "event RewardAssetOptedIn(uint256 indexed positionId,address indexed asset,uint256 actualPendingStake,uint256 effectivePendingWeight,uint40 eligibleAt)",
@@ -1896,6 +1902,8 @@ export type StaticsLiquidityEventName =
   | "Staked"
   | "Unstaked"
   | "GlobalFeeAccrued"
+  | "SwapRewardCrystallized"
+  | "SwapRewardFunded"
   | "RewardClaimed"
   | "TreasuryFeesDistributed"
   | "RewardAssetOptedIn"
@@ -3064,6 +3072,14 @@ export function buildUnstakeCall(positionId: bigint, amount: bigint, receiver: A
 
 export function buildCheckpointRewardAssetsCall(assets: readonly Address[]): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "checkpointRewardAssets", args: [assets] });
+}
+
+export function buildSettlePublicSwapRewardsCall(asset: Address, maximumAmount: bigint): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "settlePublicSwapRewards",
+    args: [asset, maximumAmount],
+  });
 }
 
 export function buildLinkGenesisCall(positionId: bigint, genesisId: bigint): Hex {

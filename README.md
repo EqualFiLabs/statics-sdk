@@ -134,6 +134,13 @@ and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
 
+Public-pool STATICS-staker ownership is indexed in the authenticated swap
+callback, while the corresponding PoolManager claim may remain unsettled.
+`unfundedSwapRewards`, `fundedGlobalRewards`, and
+`outstandingGlobalRewardLiability` expose that separation. Any caller may use
+`buildSettlePublicSwapRewardsCall` to fund up to the requested crystallized
+amount; settlement changes liquidity timing, not historical ownership.
+
 `stakePosition` distinguishes raw `stakedBalance` from the current
 `rewardMultiplierBps`; reward-asset and selection reads expose both raw stake
 and effective weight. `buildLinkGenesisCall(positionId, genesisId)` and
