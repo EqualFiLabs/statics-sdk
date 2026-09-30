@@ -309,7 +309,6 @@ describe("range gauge discovery and previews", () => {
       assigned: true,
       slot: 1,
       asset,
-      protocolEpoch: 0n,
       periodStart: 1,
       periodFinish: 2,
       lastUpdate: 1,
