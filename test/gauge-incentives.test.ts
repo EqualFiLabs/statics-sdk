@@ -2,6 +2,7 @@ import {
   decodeErrorResult,
   decodeEventLog,
   decodeFunctionData,
+  encodeAbiParameters,
   encodeErrorResult,
   encodeEventTopics,
   encodeFunctionResult,
@@ -19,6 +20,7 @@ import {
   buildCheckpointGaugeScheduleCall,
   buildCurrentGaugePeriodCall,
   buildFundGaugeReserveCall,
+  buildForfeitGaugeAllocatorRewardCall,
   buildGaugeAllocationCooldownCall,
   buildGaugeAllocatorRewardCall,
   buildGaugePeriodAtCall,
@@ -58,6 +60,7 @@ const functionNames = [
   "setGaugeAllocationCooldown",
   "syncGaugeAllocationsAfterStakeLoss",
   "claimGaugeAllocatorRewards",
+  "forfeitGaugeAllocatorReward",
   "currentGaugePeriod",
   "gaugePeriodAt",
   "gaugeReserve",
@@ -112,6 +115,24 @@ describe("gauge incentives ABI", () => {
       errorName: "InvalidGaugeReleaseBps",
       args: [1_001n],
     });
+
+    const forfeitTopics = encodeEventTopics({
+      abi: staticsGaugeIncentivesAbi,
+      eventName: "GaugeAllocatorRewardForfeited",
+      args: { positionId: 7n, poolId, slot: 2 },
+    });
+    const forfeitData = encodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }],
+      [funder, 25n],
+    );
+    expect(
+      decodeEventLog({
+        abi: staticsGaugeIncentivesAbi,
+        eventName: "GaugeAllocatorRewardForfeited",
+        topics: forfeitTopics,
+        data: forfeitData,
+      }).args,
+    ).toMatchObject({ positionId: 7n, poolId, slot: 2, asset: funder, amount: 25n });
   });
 });
 
@@ -142,6 +163,12 @@ describe("gauge incentive calldata", () => {
     expect(() => buildClaimGaugeAllocatorRewardsCall(7n, poolId, [1, 1], [0n, 0n], funder)).toThrow(
       /duplicate/,
     );
+    const forfeit = buildForfeitGaugeAllocatorRewardCall(7n, poolId, 4);
+    expect(decodeFunctionData({ abi: staticsGaugeIncentivesAbi, data: forfeit })).toMatchObject({
+      functionName: "forfeitGaugeAllocatorReward",
+      args: [7n, poolId, 4],
+    });
+    expect(() => buildForfeitGaugeAllocatorRewardCall(7n, poolId, 0)).toThrow(/between 1 and 4/);
   });
 
   it("builds bounded, unique persistent allocations", () => {

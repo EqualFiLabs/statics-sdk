@@ -96,6 +96,7 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "function setGaugeAllocationCooldown(uint40 cooldown)",
   "function syncGaugeAllocationsAfterStakeLoss(uint256 positionId,uint256 remainingStake)",
   "function claimGaugeAllocatorRewards(uint256 positionId,bytes32 poolId,uint8[] slots,uint256[] minimumAmounts,address receiver) returns (uint256[] received)",
+  "function forfeitGaugeAllocatorReward(uint256 positionId,bytes32 poolId,uint8 slot) returns (uint256 amount)",
   "function currentGaugePeriod() view returns (uint64 period)",
   "function gaugePeriodAt(uint256 timestamp) view returns (uint64 period,bool active)",
   "function gaugeReserve() view returns ((bool activated,uint16 releaseBps,uint16 pendingReleaseBps,uint40 pendingReleaseAt,uint40 deferredMaturityAt,uint40 scheduleStart,uint40 lastCheckpoint,uint40 periodStart,uint40 periodFinish,uint64 currentPeriod,uint40 allocationCooldown,uint256 available,uint256 deferred,uint256 committed,uint256 periodBudget,uint256 periodAccounted,uint256 totalAllocatedWeight,uint256 globalIndexX160,uint256 unsettledRoutingLiability) state)",
@@ -118,6 +119,7 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "event ProtocolGaugeRewardCredited(bytes32 indexed poolId,uint256 amount)",
   "event ProtocolGaugeRewardRecycled(bytes32 indexed poolId,uint256 amount)",
   "event GaugeAllocatorRewardClaimed(uint256 indexed positionId,bytes32 indexed poolId,uint8 indexed slot,address asset,address receiver,uint256 debited,uint256 received)",
+  "event GaugeAllocatorRewardForfeited(uint256 indexed positionId,bytes32 indexed poolId,uint8 indexed slot,address asset,uint256 amount)",
   "error InvalidGaugeFundingAmount()",
   "error IncompatibleGaugeTokenTransfer(uint256 requested,uint256 received)",
   "error GaugeAllocationLengthMismatch()",
@@ -154,7 +156,8 @@ export type GaugeIncentiveEventName =
   | "GaugePeriodStarted"
   | "ProtocolGaugeRewardCredited"
   | "ProtocolGaugeRewardRecycled"
-  | "GaugeAllocatorRewardClaimed";
+  | "GaugeAllocatorRewardClaimed"
+  | "GaugeAllocatorRewardForfeited";
 
 export type GaugeIncentiveEventArgs<Name extends GaugeIncentiveEventName> =
   ContractEventArgs<typeof staticsGaugeIncentivesAbi, Name>;
@@ -247,6 +250,14 @@ export function buildClaimGaugeAllocatorRewardsCall(
     abi: staticsGaugeIncentivesAbi,
     functionName: "claimGaugeAllocatorRewards",
     args: [positionId, poolId, validatedSlots, minimumAmounts, receiver],
+  });
+}
+
+export function buildForfeitGaugeAllocatorRewardCall(positionId: bigint, poolId: Hex, slot: number): Hex {
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "forfeitGaugeAllocatorReward",
+    args: [positionId, poolId, validateAllocatorSlot(slot)],
   });
 }
 
