@@ -124,8 +124,8 @@ not pay the fee again. Zero means free Position creation.
 SVG identity belongs to the separate 5,555-token Genesis collection, whose
 `tokenURI` reflects its permanent token identity and current activation tier.
 
-Global Statics stake has no cooldown, but only the undeployed balance is
-withdrawable: stake used as Morpho collateral must first be recalled, and
+Global Statics stake has no withdrawal cooldown, but only the undeployed balance
+is withdrawable: stake used as Morpho collateral must first be recalled, and
 synchronization can record a collateral loss. A selected reward asset begins
 with pending stake and becomes eligible at the next hourly boundary at least
 24 hours later. A top-up merges with existing pending stake using weighted age;
@@ -133,6 +133,12 @@ mature stake remains eligible. Read `rewardSelection` for the exact timestamp
 and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
+
+Gauge routing has a separate governed cooldown. Every positive stake ingress
+starts or extends the PositionNFT's allocation deadline. Existing PoolId
+allocations continue earning and may be reduced or removed during that period,
+but they cannot be increased or redirected and a new destination cannot be
+added. Unallocated principal remains withdrawable.
 
 Public-pool STATICS-staker ownership is indexed in the authenticated swap
 callback, while the corresponding PoolManager claim may remain unsettled.

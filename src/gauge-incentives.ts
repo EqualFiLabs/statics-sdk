@@ -114,6 +114,7 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "event GaugeReleaseBpsScheduled(uint16 releaseBps,uint40 indexed effectiveAt)",
   "event GaugeAllocationCooldownSet(uint40 cooldown)",
   "event PositionGaugeAllocationsSet(uint256 indexed positionId,uint40 indexed nextAllocationAt,uint256 totalAllocated)",
+  "event PositionGaugeAllocationCooldownExtended(uint256 indexed positionId,uint40 indexed nextAllocationAt)",
   "event PositionGaugeAllocationsClearedByStakeLoss(uint256 indexed positionId,uint256 remainingStake)",
   "event GaugePeriodStarted(uint64 indexed period,uint40 indexed start,uint40 indexed finish,uint16 releaseBps,uint256 budget,uint256 totalAllocatedWeight)",
   "event ProtocolGaugeRewardCredited(bytes32 indexed poolId,uint256 amount)",
@@ -152,6 +153,7 @@ export type GaugeIncentiveEventName =
   | "GaugeReleaseBpsScheduled"
   | "GaugeAllocationCooldownSet"
   | "PositionGaugeAllocationsSet"
+  | "PositionGaugeAllocationCooldownExtended"
   | "PositionGaugeAllocationsClearedByStakeLoss"
   | "GaugePeriodStarted"
   | "ProtocolGaugeRewardCredited"

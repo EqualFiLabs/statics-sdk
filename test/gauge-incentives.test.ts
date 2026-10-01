@@ -106,6 +106,20 @@ describe("gauge incentives ABI", () => {
       decodeEventLog({ abi: staticsGaugeIncentivesAbi, eventName: "GaugeReserveFunded", topics, data }).args,
     ).toMatchObject({ funder, amount: 1_000n, maturityAt: 604_800 });
 
+    const cooldownTopics = encodeEventTopics({
+      abi: staticsGaugeIncentivesAbi,
+      eventName: "PositionGaugeAllocationCooldownExtended",
+      args: { positionId: 7n, nextAllocationAt: 1_014_400 },
+    });
+    expect(
+      decodeEventLog({
+        abi: staticsGaugeIncentivesAbi,
+        eventName: "PositionGaugeAllocationCooldownExtended",
+        topics: cooldownTopics,
+        data: "0x",
+      }).args,
+    ).toMatchObject({ positionId: 7n, nextAllocationAt: 1_014_400 });
+
     const encodedError = encodeErrorResult({
       abi: staticsGaugeIncentivesAbi,
       errorName: "InvalidGaugeReleaseBps",
