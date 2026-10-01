@@ -124,8 +124,8 @@ not pay the fee again. Zero means free Position creation.
 SVG identity belongs to the separate 5,555-token Genesis collection, whose
 `tokenURI` reflects its permanent token identity and current activation tier.
 
-Global Statics stake has no cooldown, but only the undeployed balance is
-withdrawable: stake used as Morpho collateral must first be recalled, and
+Global Statics stake has no withdrawal cooldown, but only the undeployed balance
+is withdrawable: stake used as Morpho collateral must first be recalled, and
 synchronization can record a collateral loss. A selected reward asset begins
 with pending stake and becomes eligible at the next hourly boundary at least
 24 hours later. A top-up merges with existing pending stake using weighted age;
@@ -133,6 +133,19 @@ mature stake remains eligible. Read `rewardSelection` for the exact timestamp
 and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
+
+Gauge routing has a separate governed cooldown. Every positive stake ingress
+starts or extends the PositionNFT's allocation deadline. Existing PoolId
+allocations continue earning and may be reduced or removed during that period,
+but they cannot be increased or redirected and a new destination cannot be
+added. Unallocated principal remains withdrawable.
+
+Public-pool STATICS-staker ownership is indexed in the authenticated swap
+callback, while the corresponding PoolManager claim may remain unsettled.
+`unfundedSwapRewards`, `fundedGlobalRewards`, and
+`outstandingGlobalRewardLiability` expose that separation. Any caller may use
+`buildSettlePublicSwapRewardsCall` to fund up to the requested crystallized
+amount; settlement changes liquidity timing, not historical ownership.
 
 `stakePosition` distinguishes raw `stakedBalance` from the current
 `rewardMultiplierBps`; reward-asset and selection reads expose both raw stake
@@ -225,14 +238,40 @@ the stream immediately before funding and choose the minimum remaining schedule
 they are willing to accept. A zero value deliberately opts out of that
 protection.
 
+### Market telemetry
+
+`staticsMarketTapeAbi` exposes canonical per-PoolId market counters and bounded
+historical observations. Canonical volume, Statics fees, swap counts, final
+tick, native LP fee, flags, and sequence are written inside the authenticated
+swap callback. These counters are gapless while the pool can trade. Saturated
+fields stop at `uint256.max` and are identified by the
+`MARKET_SAT_*` bitmask constants.
+
+`lastNativeLpFee` is the static fee rate in pips, not an exact cumulative
+native LP fee amount. Uniswap position accounting remains authoritative for
+native fee revenue.
+
+Historical observations are a best-effort analytics layer. Use
+`buildMarketObservationConfigCall` to inspect its cadence, retained capacity,
+failed-write count, and last failed canonical sequence. A failed observation
+does not revert an otherwise valid swap, so consumers must use the canonical
+sequence and failure fields to detect gaps. Internal permissioned normalization
+volume is accounted separately from external economic volume and does not
+produce historical observations.
+
+Governance can configure the bounded observation ring with
+`buildSetMarketObservationConfigCall`. `recordMarketObservation` and
+`afterStaticsPoolSwap` are included in the exported ABIs for interface fidelity
+but are authenticated protocol callbacks, not integration entry points.
+
 `buildCreateBasketTransaction` requires one semantic
 constituent-per-BasketToken square-root price, creator-selected static native LP
 fee, tick spacing, paired-asset amount, and measured complete input cap per
 constituent, plus a launch deadline. Prices are ratios of
 raw smallest token units, not decimal-normalized display units. Use
 `encodeSqrtPriceAssetPerBasketX96(assetAmountRaw, basketAmountRaw)` to construct
-them. The creation transaction registers, initializes, backs, and
-permanently seeds every canonical pool. There is no standalone initialization
+them. The creation transaction registers, initializes, backs, and opens the
+initial protocol-owned managed position for every canonical pool. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 
@@ -250,18 +289,23 @@ to the sorted-currency orientation with `normalizeSqrtPriceBPerAX96`. Simulate
 `quoteProtocolPool` (or `buildQuotePoolCall`) before submission to recover the
 canonical `poolId` and the normalized `sqrtPriceX96`. When creation requires an
 authorized creator, `buildCreatePoolAuthorizationTypedData` produces the
-EIP-712 `CreatePool` payload under domain `Statics Protocol Pools`, version `3`,
+EIP-712 `CreatePool` payload under domain `Statics Protocol Pools`, version `4`,
 the chain id, and the Diamond as `verifyingContract`. The signed message binds
-the PoolId, normalized `sqrtPriceX96`, and both initial hook-fee legs, and
+the PoolId, normalized `sqrtPriceX96`, both initial hook-fee legs, and the
+creator's managed-POL activation choice. The
 `computeCreatePoolAuthorizationDigest` reproduces the exact digest the Diamond
-verifies. Read `quotePool(params).creationFee` immediately
-before calling `buildCreatePoolTransaction(params, creationFee, creatorAuthorization)`;
-the returned transaction includes that fee as `value`
+verifies. Read `quotePool(params).totalNativeFee` immediately before calling
+`buildCreatePoolTransaction(params, totalNativeFee, creatorAuthorization)`;
+the returned transaction includes both the creation fee and any managed-POL
+activation fee as `value`
 (`buildSetPoolCreationFeeCall` administers it).
 `buildInvalidatePoolCreationNonceCall` burns an unused creator nonce. General
 pool creation requires no token approvals, no initial funding, and no mandatory
-permanent-liquidity seed: a general pool initializes with zero liquidity and
-grows protocol-owned liquidity from subsequent swap activity.
+protocol-liquidity seed. Managed POL is disabled by default, so its would-be
+share routes to Treasury without creating dormant inventory. A creator may pay
+the governed activation fee at creation or later with
+`buildActivateProtocolPoolPolTransaction`; activation is prospective and
+permanent.
 
 `protocolPool(poolId)` normalizes basket canonical, permissionless general, and
 permissioned general pools, and `isProtocolPool`, `protocolPoolCreator`, `creatorRevenue`,
@@ -274,9 +318,10 @@ non-overridden public pool. A general-pool creator may select a higher rate only
 at creation; the PoolId override builders remain governance-only and work for
 basket and permissionless general pools. Pool creators claim PoolId-local revenue with
 `buildClaimCreatorRevenueCall(poolId, asset, receiver, minReceived)`, and
-`buildDecommissionGeneralPoolCall` performs
-the irreversible treasury recovery of a non-basket pool without touching user
-LP NFTs.
+`buildBeginGeneralPoolDecommissionCall` stops the venue and gauge. Protocol POL
+positions are then closed explicitly before
+`buildFinalizeGeneralPoolDecommissionCall` moves remaining protocol inventory
+to Treasury. Neither stage touches user LP NFTs.
 
 Canonical pools are usable immediately after atomic basket launch. Creators do
 not configure hook fees during basket or general-pool creation. Basket and
@@ -319,13 +364,20 @@ then applies the pool-class allocation among protocol-owned liquidity,
 basket-stakers where applicable, global Statics stakers, and treasury. An
 unavailable basket-staker share routes to protocol-owned liquidity, an
 unavailable Statics-staker share routes to treasury, the creator share never
-falls back, and treasury absorbs rounding dust. Matched locked liquidity is
-added as hook-owned full-range liquidity during the swap.
+falls back, and treasury absorbs rounding dust. Activated POL shares accumulate
+as claim-backed, PoolId-local inventory until permissionless settlement into
+Diamond custody.
 
-Native fees earned by that permanent position are separate treasury revenue.
-Governance configures the authorized caller with
-`buildSetPermanentLiquidityHarvesterCall`; that caller uses
-`buildHarvestPermanentLiquidityFeesCall`, which exposes no recipient choice.
+Managed POL positions are explicit PositionManager NFTs owned by the installed
+`StaticsLiquidityManager` and bound as protocol positions in the Diamond.
+Governance configures the strategy operator with
+`buildSetProtocolPolOperatorCall`. The operator may open, increase, decrease,
+collect, and close explicit positions, but every principal refund and output is
+fixed to protocol custody. Native LP fees are harvested separately to Treasury
+with `buildCollectProtocolPolFeesCall` and never become POL principal. Per-pool
+funding overrides can reduce future funding to zero without closing the existing
+portfolio. A later global profile change caps an older override to the current
+POL-plus-Treasury bucket so fee allocation cannot block swaps.
 The SDK preserves all valid native fee values below 1,000,000 pips without
 rounding them to whole basis points.
 
@@ -363,10 +415,10 @@ recipient. Their position state and native v4 LP fees can be read from
 PositionManager and StateView. The Diamond does not custody user LP NFTs,
 maintain a separate LP reward ledger, or expose a manager-controlled increase
 path.
-Hook-owned permanent liquidity is observed through `lockedLiquidity` and
-`pendingPermanentLiquidity`; it has no protocol PositionManager token ID.
-Native fees earned by that hook-owned position route exclusively to treasury
-and never re-enter compounding.
+Protocol-owned liquidity is observed through `protocolPool`,
+`protocolPolPosition`, `protocolPolPositionIds`, `pendingProtocolPol`, and the
+PoolId-specific custody account. Protocol position IDs are independent of
+PositionManager token IDs and remain bound across liquidity-manager replacement.
 User v4 NFTs are discovered from PositionManager `Transfer` and manager
 `UserPositionMinted` events. They belong to the selected LP recipient and
 remain independent of PositionNFT transfers, repayment, extension, and

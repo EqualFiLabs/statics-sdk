@@ -76,6 +76,7 @@ import {
   buildSetGenesisRewardShareBpsCall,
   buildSetPositionCreationFeeCall,
   buildSetSingleAssetFlashFeeBpsCall,
+  buildSettlePublicSwapRewardsCall,
   buildActivateGenesisCall,
   buildCheckpointRewardAssetsCall,
   buildClaimCreatorRevenueCall,
@@ -100,9 +101,13 @@ import {
   buildSetDefaultProtocolPoolFeeRateCall,
   buildSetBasketFeeAllocationCall,
   buildSetGeneralFeeAllocationCall,
-  buildDecommissionGeneralPoolCall,
-  buildSetPermanentLiquidityHarvesterCall,
-  buildHarvestPermanentLiquidityFeesCall,
+  buildBeginGeneralPoolDecommissionCall,
+  buildFinalizeGeneralPoolDecommissionCall,
+  buildSetProtocolPoolMaintenanceConfigCall,
+  buildSettleProtocolPoolRevenueCall,
+  buildActivateProtocolPoolPolTransaction,
+  buildSetProtocolPoolPolShareCall,
+  buildSettleProtocolPoolPolCall,
   buildCreatePoolAuthorizationTypedData,
   buildPermissionedPoolCreationTypedData,
   buildPermissionedPoolTermsTypedData,
@@ -592,6 +597,7 @@ describe("Statics static basket quotes", () => {
       sqrtPriceBPerAX96: encodeSqrtPriceBPerAX96(1n, 1n),
       initialFeeRate: feeRate,
       creator: receiver,
+      activateManagedPol: true,
       nonce: 7n,
       deadline: 7_200n,
     };
@@ -624,7 +630,7 @@ describe("Statics static basket quotes", () => {
       ...createParams,
       initialFeeRate: { inputFeeBps: 100n, outputFeeBps: 101n },
     }, 0n)).toThrow("combined pool fee rate exceeds 200 BPS");
-    expect(() => buildCreatePoolTransaction(createParams, -1n)).toThrow("creationFee exceeds uint256");
+    expect(() => buildCreatePoolTransaction(createParams, -1n)).toThrow("totalNativeFee exceeds uint256");
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildInvalidatePoolCreationNonceCall(9n) }))
       .toEqual({ functionName: "invalidatePoolCreationNonce", args: [9n] });
@@ -676,14 +682,29 @@ describe("Statics static basket quotes", () => {
     expect(() => buildSetGeneralFeeAllocationCall({ ...generalAllocation, treasuryShareBps: 2_001n }))
       .toThrow("general fee allocation must sum to 9500 BPS");
 
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildDecommissionGeneralPoolCall(poolId) }).functionName)
-      .toBe("decommissionGeneralPool");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildBeginGeneralPoolDecommissionCall(poolId) }).functionName)
+      .toBe("beginGeneralPoolDecommission");
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildFinalizeGeneralPoolDecommissionCall(poolId) }).functionName)
+      .toBe("finalizeGeneralPoolDecommission");
+    const maintenance = {
+      revenueTipBps: 500n,
+    };
     expect(decodeFunctionData({
       abi: staticsAbi,
-      data: buildSetPermanentLiquidityHarvesterCall(receiver),
-    })).toEqual({ functionName: "setPermanentLiquidityHarvester", args: [receiver] });
-    expect(decodeFunctionData({ abi: staticsAbi, data: buildHarvestPermanentLiquidityFeesCall(poolId) }))
-      .toEqual({ functionName: "harvestPermanentLiquidityFees", args: [poolId] });
+      data: buildSetProtocolPoolMaintenanceConfigCall(maintenance),
+    })).toEqual({
+      functionName: "setProtocolPoolMaintenanceConfig",
+      args: [{ revenueTipBps: 500 }],
+    });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSettleProtocolPoolRevenueCall(poolId, assetA) }))
+      .toEqual({ functionName: "settleProtocolPoolRevenue", args: [poolId, assetA] });
+    expect(buildActivateProtocolPoolPolTransaction(poolId, 123n).value).toBe(123n);
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSetProtocolPoolPolShareCall(poolId, 4_000n) }))
+      .toEqual({ functionName: "setProtocolPoolPolShare", args: [poolId, 4_000] });
+    expect(decodeFunctionData({ abi: staticsAbi, data: buildSettleProtocolPoolPolCall(poolId, assetA, 10n) }))
+      .toEqual({ functionName: "settleProtocolPoolPol", args: [poolId, assetA, 10n] });
+    expect(() => buildSetProtocolPoolMaintenanceConfigCall({ ...maintenance, revenueTipBps: 2_001n }))
+      .toThrow("revenue maintenance tip exceeds 2000 BPS");
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClaimCreatorRevenueCall(poolId, assetA, receiver, 5n) }))
       .toEqual({ functionName: "claimCreatorRevenue", args: [poolId, assetA, receiver, 5n] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildReplaceLiquidityManagerCall(manager) }).functionName)
@@ -926,6 +947,7 @@ describe("Statics static basket quotes", () => {
       inputFeeBps: 40n,
       outputFeeBps: 60n,
       creator: receiver,
+      activateManagedPol: true,
       nonce: 7n,
       deadline: 7_200n,
     };
@@ -933,7 +955,7 @@ describe("Statics static basket quotes", () => {
     const typedData = buildCreatePoolAuthorizationTypedData(chainId, diamond, message);
     expect(typedData.domain).toEqual({
       name: "Statics Protocol Pools",
-      version: "3",
+      version: "4",
       chainId,
       verifyingContract: diamond,
     });
@@ -944,6 +966,7 @@ describe("Statics static basket quotes", () => {
       "inputFeeBps",
       "outputFeeBps",
       "creator",
+      "activateManagedPol",
       "nonce",
       "deadline",
     ]);
@@ -965,15 +988,19 @@ describe("Statics static basket quotes", () => {
         sqrtPriceBPerAX96: Q96,
         initialFeeRate: { inputFeeBps: 40n, outputFeeBps: 60n },
         creator: receiver,
+        activateManagedPol: true,
         nonce: 7n,
         deadline: 7_200n,
       },
       1_000n,
+      250n,
     );
     expect(quote.poolId).toBe(poolId);
     expect(quote.key).toEqual(key);
     expect(quote.sqrtPriceX96).toBe(Q96);
     expect(quote.creationFee).toBe(1_000n);
+    expect(quote.polActivationFee).toBe(250n);
+    expect(quote.totalNativeFee).toBe(1_250n);
     expect(quote.authorizationDigest).toBe(manual);
   });
 
@@ -985,6 +1012,7 @@ describe("Statics static basket quotes", () => {
       inputFeeBps: 40n,
       outputFeeBps: 60n,
       creator: receiver,
+      activateManagedPol: false,
       nonce: 1n,
       deadline: 7_200n,
     };
@@ -1898,6 +1926,9 @@ describe("Statics unified calldata", () => {
       "rewardSelection",
       "rewardEligibilityDelay",
       "rewardEligibilityBucketSize",
+      "unfundedSwapRewards",
+      "fundedGlobalRewards",
+      "outstandingGlobalRewardLiability",
     ]) {
       expect(
         staticsAbi.some((entry) => entry.type === "function" && entry.name === functionName),
@@ -1929,6 +1960,12 @@ describe("Statics unified calldata", () => {
     expect(
       decodeFunctionData({ abi: staticsAbi, data: buildOptOutRewardAssetsCall(17n, [assetB]) }).functionName,
     ).toBe("optOutRewardAssets");
+    expect(
+      decodeFunctionData({ abi: staticsAbi, data: buildSettlePublicSwapRewardsCall(assetA, 25n) }),
+    ).toEqual({ functionName: "settlePublicSwapRewards", args: [assetA, 25n] });
+    for (const eventName of ["SwapRewardCrystallized", "SwapRewardFunded"]) {
+      expect(staticsAbi.some((entry) => entry.type === "event" && entry.name === eventName)).toBe(true);
+    }
     expect(allowsExposureIncrease(BasketStatus.Active)).toBe(true);
     expect(allowsExposureIncrease(BasketStatus.Quarantined)).toBe(false);
     expect(allowsExposureIncrease(BasketStatus.ExitOnly)).toBe(false);
@@ -2232,7 +2269,7 @@ describe("Statics unified calldata", () => {
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "event" && item.name === "PoolFeeRateSet"))
       .toBe(true);
     expect(staticsSwapFeeHookAbi.some((item) => item.type === "function" && item.name === "permanentLiquidityMath"))
-      .toBe(true);
+      .toBe(false);
   });
 
   it("encodes Genesis, checkpoint, creator, and partner actions", () => {

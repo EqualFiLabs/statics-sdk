@@ -182,19 +182,16 @@ describe("range gauge calldata", () => {
 
     const funding = decodeFunctionData({
       abi: staticsRangeGaugeAbi,
-      data: buildFundPoolRewardCall(poolId, 2, 1_000n, 86_400n, 2_500, 42n),
+      data: buildFundPoolRewardCall(poolId, 2, 1_000n, 86_400n, 2_500),
     });
     expect(funding.functionName).toBe("fundPoolReward");
-    expect(funding.args).toEqual([poolId, 2, 1_000n, 86_400, 2_500, 42n]);
+    expect(funding.args).toEqual([poolId, 2, 1_000n, 86_400, 2_500]);
     expect(() => buildSetPoolRewardAllocatorShareCall(poolId, 2, 10_001)).toThrow(/allocatorShareBps/);
-    expect(() => buildFundPoolRewardCall(poolId, 0, 1n, 1n, 0, 0n)).toThrow(/slot/);
-    expect(() => buildFundPoolRewardCall(poolId, 5, 1n, 1n, 0, 0n)).toThrow(/slot/);
-    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n << 40n, 0, 0n)).toThrow(/minRemainingDuration/);
-    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n, 10_001, 0n)).toThrow(
+    expect(() => buildFundPoolRewardCall(poolId, 0, 1n, 1n, 0)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 5, 1n, 1n, 0)).toThrow(/slot/);
+    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n << 40n, 0)).toThrow(/minRemainingDuration/);
+    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n, 10_001)).toThrow(
       /expectedAllocatorShareBps/,
-    );
-    expect(() => buildFundPoolRewardCall(poolId, 2, 1n, 1n, 0, 1n << 64n)).toThrow(
-      /expectedAllocatorEpoch/,
     );
   });
 
@@ -312,7 +309,6 @@ describe("range gauge discovery and previews", () => {
       assigned: true,
       slot: 1,
       asset,
-      protocolEpoch: 0n,
       periodStart: 1,
       periodFinish: 2,
       lastUpdate: 1,
