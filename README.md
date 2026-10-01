@@ -4,6 +4,9 @@ This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.
 
+To install the package, quote a basket mint, and build the `mint` call, start
+with [examples/mint-basket.md](examples/mint-basket.md).
+
 ## Standalone Genesis launch
 
 The SDK also exposes the standalone Genesis contracts that launch before the
