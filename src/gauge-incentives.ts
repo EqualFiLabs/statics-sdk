@@ -86,6 +86,11 @@ export type GaugeAllocatorClaimPreview = {
   amount: bigint;
 };
 
+export type GaugeAllocatorPoolPage = {
+  poolIds: readonly Hex[];
+  nextCursor: bigint;
+};
+
 export const staticsGaugeIncentivesAbi = parseAbi([
   "function fundGaugeReserve(uint256 amount) returns (uint256 received)",
   "function activateGaugeSchedule() returns (uint256 budget)",
@@ -109,6 +114,7 @@ export const staticsGaugeIncentivesAbi = parseAbi([
   "function gaugeAllocationCooldown() view returns (uint40 cooldown)",
   "function gaugeAllocatorReward(bytes32 poolId,uint8 slot) view returns ((address asset,bytes32 eligibilityVersion,uint64 fundingRestrictionSequence,uint40 periodStart,uint40 periodFinish,uint40 lastUpdate,uint256 periodBudget,uint256 periodEmitted,uint256 globalIndexX160,uint256 indexedLiability,uint256 claimLiability,bool terminated) state)",
   "function previewGaugeAllocatorRewards(uint256 positionId,bytes32 poolId,uint8[] slots) view returns ((uint8 slot,address asset,uint256 allocation,uint256 amount)[] rewards)",
+  "function positionGaugeAllocatorPools(uint256 positionId,uint256 cursor,uint256 limit) view returns (bytes32[] poolIds,uint256 nextCursor)",
   "event GaugeReserveFunded(address indexed funder,uint256 amount,uint40 indexed maturityAt)",
   "event GaugeScheduleActivated(uint40 indexed scheduleStart,uint40 indexed firstPeriodFinish,uint256 budget)",
   "event GaugeReleaseBpsScheduled(uint16 releaseBps,uint40 indexed effectiveAt)",
@@ -332,6 +338,15 @@ export function buildPreviewGaugeAllocatorRewardsCall(
   });
 }
 
+export function buildPositionGaugeAllocatorPoolsCall(positionId: bigint, cursor: bigint, limit: bigint): Hex {
+  if (limit < 1n || limit > 100n) throw new Error("limit is out of range");
+  return encodeFunctionData({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "positionGaugeAllocatorPools",
+    args: [positionId, cursor, limit],
+  });
+}
+
 export function decodeGaugeReserveResult(data: Hex): GaugeReserve {
   return decodeFunctionResult({ abi: staticsGaugeIncentivesAbi, functionName: "gaugeReserve", data });
 }
@@ -368,4 +383,13 @@ export function decodeGaugeAllocatorRewardsPreviewResult(data: Hex): readonly Ga
     functionName: "previewGaugeAllocatorRewards",
     data,
   });
+}
+
+export function decodePositionGaugeAllocatorPoolsResult(data: Hex): GaugeAllocatorPoolPage {
+  const [poolIds, nextCursor] = decodeFunctionResult({
+    abi: staticsGaugeIncentivesAbi,
+    functionName: "positionGaugeAllocatorPools",
+    data,
+  });
+  return { poolIds, nextCursor };
 }

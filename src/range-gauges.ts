@@ -193,6 +193,7 @@ export const staticsRangeGaugeAbi = parseAbi([
   "function liquidityManager() view returns (address manager,bool installed)",
   "function recordedLiquidityManager(uint256 positionId,bytes32 poolId) view returns (address manager)",
   "function previewLpRewards(uint256 positionId,bytes32 poolId) view returns ((uint8 slotCount,address[5] assets,uint256[5] amounts) pending)",
+  "function previewNativeLpFees(uint256 positionId,bytes32 poolId) view returns (uint256 amount0,uint256 amount1)",
   "event GaugeRewardAssetAllowedSet(address indexed asset,bool allowed)",
   "event GaugeRewardDurationSet(uint40 duration)",
   "event PoolRewardAssetAppended(bytes32 indexed poolId,address indexed asset,uint8 indexed slot)",
@@ -581,6 +582,14 @@ export function buildPreviewRangeLpRewardsCall(positionId: bigint, poolId: Hex):
   });
 }
 
+export function buildPreviewNativeLpFeesCall(positionId: bigint, poolId: Hex): Hex {
+  return encodeFunctionData({
+    abi: staticsRangeGaugeAbi,
+    functionName: "previewNativeLpFees",
+    args: [positionId, poolId],
+  });
+}
+
 export function isRangeGaugeClaimOnlyLeg(leg: RangeGaugeLpLeg): boolean {
   return (
     leg.liquidity === 0n &&
@@ -620,4 +629,8 @@ export function decodePositionGaugePoolsResult(data: Hex): RangeGaugePositionPoo
 
 export function decodePreviewRangeLpRewardsResult(data: Hex): RangeGaugePendingRewards {
   return decodeFunctionResult({ abi: staticsRangeGaugeAbi, functionName: "previewLpRewards", data });
+}
+
+export function decodePreviewNativeLpFeesResult(data: Hex): readonly [bigint, bigint] {
+  return decodeFunctionResult({ abi: staticsRangeGaugeAbi, functionName: "previewNativeLpFees", data });
 }

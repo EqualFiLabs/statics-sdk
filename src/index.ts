@@ -13,10 +13,12 @@ import {
 import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
+import { staticsPositionMarketAbi } from "./position-market.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
 export * from "./gauge-incentives.js";
 export * from "./market-tape.js";
+export * from "./position-market.js";
 export * from "./range-gauges.js";
 
 export const BPS = 10_000n;
@@ -1345,12 +1347,7 @@ export const staticsAbi = [
   "function optOutRewardAssets(uint256 positionId,address[] assets)",
   "function claimRewards(uint256 positionId,address[] assets,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
   "function distributeTreasuryFees(address asset) returns (uint256 amount)",
-  "function pendingRewards(uint256 positionId,address[] assets) view returns (uint256[] amounts)",
-  "function stakePosition(uint256 positionId) view returns ((uint256 stakedBalance,uint16 rewardMultiplierBps,uint256 claimAssetCount,uint256 optedInAssetCount) position)",
   "function rewardAsset(address asset) view returns ((uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint256 indexRay,uint256 indexedReserve,uint256 totalClaimable) state)",
-  "function positionRewardAssets(uint256 positionId) view returns (address[] assets)",
-  "function isRewardAssetOptedIn(uint256 positionId,address asset) view returns (bool)",
-  "function rewardSelection(uint256 positionId,address asset) view returns ((bool selected,uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint40 eligibleAt) selection)",
   "function maxRewardAssetsPerPosition() pure returns (uint256)",
   "function rewardEligibilityDelay() pure returns (uint256)",
   "function rewardEligibilityBucketSize() pure returns (uint256)",
@@ -1480,7 +1477,6 @@ export const staticsAbi = [
   "function positionPortfolioCounts(uint256 positionId) view returns ((uint256 basketCount,uint256 loanCount,uint256 globalRewardAssetCount,uint256 riskSeriesCount,uint256 morphoMarketCount) counts)",
   "function basketIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] basketIds,uint256 nextCursor)",
   "function loanIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] loanIds,uint256 nextCursor)",
-  "function globalRewardAssetsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (address[] assets,uint256 nextCursor)",
   "function riskSeriesIdsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (uint256[] seriesIds,uint256 nextCursor)",
   "function quarantineBasket(uint256 basketId)",
   "function releaseBasketQuarantine(uint256 basketId)",
@@ -1685,6 +1681,7 @@ export const staticsAbi = [
   ...staticsGaugeIncentivesAbi,
   ...staticsMarketTapeAbi,
   ...staticsSwapCallbackAbi,
+  ...staticsPositionMarketAbi,
 ] as const;
 
 export const staticsFlashAssetBorrowerAbi = parseAbi([
