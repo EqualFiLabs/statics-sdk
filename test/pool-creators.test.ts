@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { decodeEventLog, decodeFunctionData, encodeEventTopics, encodeFunctionResult, zeroAddress, type Address, type Hex } from "viem";
-import { buildAcceptPoolCreatorCall, buildClaimCreatorRevenueCall, buildPoolCreatorConfigurationCall, buildProposePoolCreatorCall, buildSetCreatorRevenueRecipientCall, decodePoolCreatorConfigurationResult, staticsAbi, staticsPoolCreatorAbi } from "../src/index.js";
+import { decodeErrorResult, decodeEventLog, decodeFunctionData, encodeErrorResult, encodeEventTopics, encodeFunctionResult, zeroAddress, type Address, type Hex } from "viem";
+import { buildAcceptPoolCreatorCall, buildClaimCreatorRevenueCall, buildPoolCreatorConfigurationCall, buildProposePoolCreatorCall, buildSetCreatorRevenueRecipientCall, decodePoolCreatorConfigurationResult, staticsAbi, staticsPoolCreatorAbi, staticsProtocolRevenueErrorAbi } from "../src/index.js";
 
 const poolId = `0x${"12".repeat(32)}` as Hex;
 const creator = "0x0000000000000000000000000000000000000011" as Address;
@@ -52,5 +52,10 @@ describe("pool creator transfers and recipients", () => {
     expect(decodeEventLog({ abi: staticsAbi, topics, data: "0x" })).toMatchObject({ eventName: "PoolCreatorTransferred", args: { poolId, previousCreator: creator, creator: successor } });
     const recipientTopics = encodeEventTopics({ abi: staticsPoolCreatorAbi, eventName: "CreatorRevenueRecipientSet", args: { poolId, creator, recipient: successor } });
     expect(decodeEventLog({ abi: staticsAbi, topics: recipientTopics, data: "0x" })).toMatchObject({ eventName: "CreatorRevenueRecipientSet", args: { poolId, creator, recipient: successor } });
+  });
+
+  it("decodes fixed-recipient claim failures through the revenue error ABI", () => {
+    const data = encodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, errorName: "UnexpectedRevenueRecipient", args: [creator, successor] });
+    expect(decodeErrorResult({ abi: staticsProtocolRevenueErrorAbi, data })).toMatchObject({ errorName: "UnexpectedRevenueRecipient", args: [creator, successor] });
   });
 });

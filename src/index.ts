@@ -2205,9 +2205,13 @@ export const staticsGenesisErrorAbi = parseAbi([
 
 export const staticsProtocolRevenueErrorAbi = parseAbi([
   "error InvalidReceiver()",
+  "error InvalidPoolCreator(address creator)",
   "error NoCreatorRevenue(address creator,address asset)",
   "error OnlyPoolCreator(address caller,address creator)",
+  "error OnlyPendingPoolCreator(address caller,address pendingCreator)",
   "error OnlySwapFeeHook(address caller,address expected)",
+  "error UnexpectedRevenueRecipient(address receiver,address expected)",
+  "error UnsupportedCreatorPool(bytes32 poolId)",
   "error GeneralPoolBasketReward(bytes32 poolId,uint256 amount)",
   "error MinimumOutputNotMet(address asset,uint256 actual,uint256 minimum)",
   "error IncompatibleRevenueAsset(address asset,uint256 expected,uint256 actual)",
