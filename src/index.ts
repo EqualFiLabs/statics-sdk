@@ -14,11 +14,13 @@ import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
 import { staticsPositionMarketAbi } from "./position-market.js";
+import { staticsPoolCreatorAbi } from "./pool-creators.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
 export * from "./gauge-incentives.js";
 export * from "./market-tape.js";
 export * from "./position-market.js";
+export * from "./pool-creators.js";
 export * from "./range-gauges.js";
 
 export const BPS = 10_000n;
@@ -1682,6 +1684,7 @@ export const staticsAbi = [
   ...staticsMarketTapeAbi,
   ...staticsSwapCallbackAbi,
   ...staticsPositionMarketAbi,
+  ...staticsPoolCreatorAbi,
 ] as const;
 
 export const staticsFlashAssetBorrowerAbi = parseAbi([
@@ -1936,6 +1939,10 @@ export type StaticsLiquidityEventName =
   | "ProtocolPolPositionClosed"
   | "CreatorRevenueAccrued"
   | "CreatorRevenueClaimed"
+  | "PoolCreatorProposed"
+  | "PoolCreatorProposalCancelled"
+  | "PoolCreatorTransferred"
+  | "CreatorRevenueRecipientSet"
   | "LiquidityManagerReplaced"
   | "LiquidityManagerInstalled"
   | "CanonicalPoolSyncedToManager"
@@ -2101,6 +2108,10 @@ export const staticsProtocolPoolErrorAbi = parseAbi([
   "error IncompatibleRevenueAsset(address asset,uint256 expected,uint256 actual)",
   "error InvalidReceiver()",
   "error NoCreatorRevenue(address creator,address asset)",
+  "error UnsupportedCreatorPool(bytes32 poolId)",
+  "error InvalidPoolCreator(address creator)",
+  "error OnlyPendingPoolCreator(address caller,address pendingCreator)",
+  "error UnexpectedRevenueRecipient(address receiver,address expected)",
   "error MinimumOutputNotMet(address asset,uint256 actual,uint256 minimum)",
   "error ProtocolPoolNotRegistered(bytes32 poolId)",
   "error ProtocolPoolAlreadyRegistered(bytes32 poolId,uint8 kind)",
