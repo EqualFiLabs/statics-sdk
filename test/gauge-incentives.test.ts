@@ -32,6 +32,7 @@ import {
   buildMaxWeeklyGaugeReleaseBpsCall,
   buildPreviewGaugeAllocatorRewardsCall,
   buildPreviewGaugePoolRewardCall,
+  buildPositionGaugeAllocatorPoolsCall,
   buildScheduleGaugeReleaseBpsCall,
   buildSetGaugeAllocationCooldownCall,
   buildSetGaugeAllocationsCall,
@@ -41,6 +42,7 @@ import {
   decodeGaugePoolWeightResult,
   decodeGaugePositionAllocationsResult,
   decodeGaugeReserveResult,
+  decodePositionGaugeAllocatorPoolsResult,
   staticsAbi,
   staticsGaugeIncentivesAbi,
 } from "../src/index.js";
@@ -73,6 +75,7 @@ const functionNames = [
   "gaugeAllocationCooldown",
   "gaugeAllocatorReward",
   "previewGaugeAllocatorRewards",
+  "positionGaugeAllocatorPools",
 ] as const;
 
 function decodedName(data: Hex): string {
@@ -218,9 +221,25 @@ describe("gauge incentive calldata", () => {
     expect(decodedName(buildMaxGaugeCatchupPeriodsCall())).toBe("maxGaugeCatchupPeriods");
     expect(decodedName(buildGaugeAllocationCooldownCall())).toBe("gaugeAllocationCooldown");
     expect(decodedName(buildGaugeAllocatorRewardCall(poolId, 2))).toBe("gaugeAllocatorReward");
+    expect(decodedName(buildPositionGaugeAllocatorPoolsCall(7n, 0n, 25n))).toBe(
+      "positionGaugeAllocatorPools",
+    );
+    expect(() => buildPositionGaugeAllocatorPoolsCall(7n, 0n, 0n)).toThrow(/out of range/);
     expect(decodedName(buildPreviewGaugeAllocatorRewardsCall(7n, poolId, [2]))).toBe(
       "previewGaugeAllocatorRewards",
     );
+  });
+
+  it("decodes allocator pool discovery pages", () => {
+    const result = encodeFunctionResult({
+      abi: staticsGaugeIncentivesAbi,
+      functionName: "positionGaugeAllocatorPools",
+      result: [[poolId, secondPoolId], 2n],
+    });
+    expect(decodePositionGaugeAllocatorPoolsResult(result)).toEqual({
+      poolIds: [poolId, secondPoolId],
+      nextCursor: 2n,
+    });
   });
 });
 

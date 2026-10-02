@@ -31,6 +31,7 @@ import {
   buildPoolRewardStreamCall,
   buildPosmBindingCall,
   buildPreviewRangeLpRewardsCall,
+  buildPreviewNativeLpFeesCall,
   buildProvideRangeLiquidityCall,
   buildRangeGaugeLpLegCall,
   buildRangeGaugeLiquidityManagerCall,
@@ -44,6 +45,7 @@ import {
   buildSetPoolRewardAllocatorShareCall,
   decodePositionGaugePoolsResult,
   decodePreviewRangeLpRewardsResult,
+  decodePreviewNativeLpFeesResult,
   decodeRangeGaugeLpLegResult,
   decodeRangeGaugeRewardStreamResult,
   isRangeGaugeClaimOnlyLeg,
@@ -91,6 +93,7 @@ const functionNames = [
   "liquidityManager",
   "recordedLiquidityManager",
   "previewLpRewards",
+  "previewNativeLpFees",
 ] as const;
 
 function decodedName(data: Hex): string {
@@ -288,6 +291,7 @@ describe("range gauge discovery and previews", () => {
 
   it("decodes onchain reward previews", () => {
     expect(decodedName(buildPreviewRangeLpRewardsCall(42n, poolId))).toBe("previewLpRewards");
+    expect(decodedName(buildPreviewNativeLpFeesCall(42n, poolId))).toBe("previewNativeLpFees");
     const result = encodeFunctionResult({
       abi: staticsRangeGaugeAbi,
       functionName: "previewLpRewards",
@@ -302,6 +306,15 @@ describe("range gauge discovery and previews", () => {
       assets: [asset, zeroAddress, zeroAddress, zeroAddress, zeroAddress],
       amounts: [9n, 0n, 0n, 0n, 0n],
     });
+  });
+
+  it("decodes native LP fee previews", () => {
+    const result = encodeFunctionResult({
+      abi: staticsRangeGaugeAbi,
+      functionName: "previewNativeLpFees",
+      result: [12n, 34n],
+    });
+    expect(decodePreviewNativeLpFeesResult(result)).toEqual([12n, 34n]);
   });
 
   it("decodes lifetime reward index capacity", () => {
