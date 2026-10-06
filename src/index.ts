@@ -26,6 +26,7 @@ export * from "./position-market.js";
 export * from "./range-gauges.js";
 export * from "./restricted-markets.js";
 export * from "./bootstrap.js";
+export * from "./mosh.js";
 
 export const BPS = 10_000n;
 export const SHARE_SCALE = 10n ** 18n;

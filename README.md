@@ -517,3 +517,13 @@ delivery adapter, `buildDeliverNativeRevenueCall(amount)` returns `{ data, value
 for `deliverNative()`: the supplied ETH is wrapped and delivered as WETH. Existing
 adapter balances cannot fund the call. Delivery routes to the fixed beneficiary
 after success or expiry; these helpers do not harvest an external fee source.
+
+Mosh native-counter custody uses a buyer-bound claim-market listing, not ERC-20
+approval/transfer. `encodeMoshNativeCustodyListing` fixes a one-wei price;
+`buildMoshNativeCustodyFillCall` returns calldata and that explicit native value.
+Inspect the pinned market's offer and fee before submitting. Listing leaves
+claims with the seller until the designated buyer fills; offers expire strictly
+at their deadline and still reserve listed claims until cancelled.
+`encodeMoshClaimMarketCancel` encodes seller cancellation; `encodeMoshSyncFees`
+cannot force PONS conversion. These helpers do not enable an unfinished pooled
+share adapter or promise historical trade-time reward ownership.
