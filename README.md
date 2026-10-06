@@ -487,3 +487,70 @@ recovery.
 `deployments/robinhood-chain-4663.json` before SDK builds and tests. It is the
 only SDK address binding for Robinhood's PoolManager, PositionManager, StateView,
 Quoter, Universal Router, Permit2, and WETH deployment.
+
+## Bootstrap and exact-output zaps
+
+Read the onchain `previewBasketLaunch` against the reserved BasketToken identity
+before funding. `previewBasketLaunch` in this SDK mirrors seed geometry, backing
+and mint-fee rounding; the onchain configuration remains authoritative.
+Use `basketCreationTypedData` for EOA or ERC-1271 creator authorization and
+`encodePrepareBasketCreationFor` / `encodeCreateBasketFor` for delegated creation.
+The authorization binds the payer, prepared deployment, complete configuration,
+nonce, expiry and native-fee bound.
+
+Campaign encoders create fixed-beneficiary campaigns, fund explicit launch or
+payment inventory, prepare reserved deployments, activate firm per-asset
+procurement, fill auctions, finalize POL, and claim terminal surplus.
+`quoteProcurementLiability` includes fragmented-fill rounding reserves.
+Suppliers receive project tokens immediately, not LP or refund rights.
+
+`encodeZapCampaignPurchase` and `encodeZapBasketMint` use separate destination
+entrypoints over typed v4 paths. Supply forward currency paths, complete
+PoolKeys, per-route input caps and one aggregate maximum. Native input uses the
+zero address and requires matching transaction value. Basket mint bounds are
+checked against the execution-time onchain quote; minted shares go directly to
+the receiver. Automatic route discovery and non-v4 conversions are not provided.
+
+`encodeBindRevenueCampaign` fixes the creator-approved destination and constituent.
+`encodeDeliverRealizedRevenue` forwards an explicit ERC-20 receipt. For the native
+delivery adapter, `buildDeliverNativeRevenueCall(amount)` returns `{ data, value }`
+for `deliverNative()`: the supplied ETH is wrapped and delivered as WETH. Existing
+adapter balances cannot fund the call. Delivery routes to the fixed beneficiary
+after success or expiry; these helpers do not harvest an external fee source.
+
+Mosh native-counter custody uses a buyer-bound claim-market listing, not ERC-20
+approval/transfer. `encodeMoshNativeCustodyListing` fixes a one-wei price;
+`buildMoshNativeCustodyFillCall` returns calldata and that explicit native value.
+Inspect the pinned market's offer and fee before submitting. Listing leaves
+claims with the seller until the designated buyer fills; offers expire strictly
+at their deadline and still reserve listed claims until cancelled.
+`encodeMoshClaimMarketCancel` encodes seller cancellation; `encodeMoshSyncFees`
+cannot force PONS conversion. These market encoders alone do not implement
+reward accounting or promise historical trade-time reward ownership.
+
+For `MoshShareRevenueAdapter`, `buildMoshShareDepositCall` fills the user's
+buyer-bound offer through the adapter with explicit one-wei value.
+`encodeMoshShareWithdrawal` prepares a return listing. The owner fills that
+market offer using `buildMoshNativeCustodyFillCall`, then anyone submits
+`encodeMoshShareCheckpoint(owner)` to reconcile its cleared record before the
+next fill/movement. `encodeMoshShareCancel` cancels an unfilled/expired listing.
+No user scan or privileged keeper is required. `encodeMoshShareSync` measures
+realized native fees; `encodeMoshShareFlush` forwards only campaign reserves;
+`encodeMoshShareClaimRewards` pays the caller's terminal rewards and return
+proceeds as WETH. Earlier campaign reserves stay campaign-owned. Listings,
+fee contribution, principal recovery, and reward claims are distinct operations.
+
+`encodePonsRevenueCollect` collects a bounded amount of realized escrow credit;
+`encodePonsRevenueHandoff` independently transfers terminal fee rights to the
+fixed beneficiary. Escrow credits are recipient-aggregated, not token-attributed.
+`encodeMoshTeamBindSource` binds a newly launched source naming the adapter as
+team recipient. For existing sources, `buildMoshTeamHandoffCall` fills an
+authorized one-wei listing of the selected permanent team claims.
+`encodeMoshTeamSync` measures receipts and `encodeMoshTeamFlush` delivers them.
+These adapters require their supported runtime-pinned source generation;
+they cannot force upstream conversion or access Swarm principal.
+
+Restricted campaign currencies require a governance-approved, runtime-pinned
+campaign factory. Approve the Statics Diamond, not the campaign or zap, for
+direct restricted-token funding. Settlement uses exact transaction-local
+custody authorization; approvals alone never authorize arbitrary transfers.
