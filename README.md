@@ -1,5 +1,47 @@
 # Statics SDK
 
+## Restricted basket identities
+
+`basketDeploymentSalt`, `effectiveBasketSalt`, `predictBasketDeployment`, and
+`basketPreparationId` match the pinned CreateX CREATE3 factory. Token prediction
+does not include constructor arguments or the eventual basket ID. Always read
+the authoritative `basketCreationConfigurationHash` view and check
+`saltAvailable` before submitting a preparation. Offline mining finds candidates,
+not guarantees of address availability.
+
+Use `encodePrepareBasketCreation` followed by `encodeCreateBasketPrepared` with
+the reserved identities and unchanged configuration. Additional independent
+markets use `encodePrepareBasketMarket` / `encodeCreateBasketMarket`. Legacy
+direct creation requires sufficient premined queue entries; replenish with
+`encodeEnqueueBasketSalts`. Restricted-token approvals do not authorize wallet
+transfers.
+
+`mineBasketHookSalts` accepts an `AbortSignal`, bounded chunks, and progress
+callbacks. Put `import "@statics-protocol/sdk/restricted-markets-worker";` in an
+application worker entry file named `basket-mining.worker.ts`, then use your
+bundler's module-worker support:
+
+```ts
+const worker = new Worker(
+  new URL("./basket-mining.worker.ts", import.meta.url),
+  { type: "module" },
+);
+worker.postMessage({ type: "mine", id: "launch", options: { factory, chainId: 46630n } });
+// Cancel only this request; terminal responses have type "result" or "error".
+worker.postMessage({ type: "cancel", id: "launch" });
+```
+
+Serve/bundle the worker as an ESM asset using your application's worker loader.
+The main SDK import has no
+worker side effects. CLI users can build and run:
+
+```sh
+npm run build
+node scripts/mine-basket-hooks.mjs <factory> <chainId> [start] [count] [attempts]
+```
+
+Both worker and CLI use the same mining engine and Solidity parity fixtures.
+
 This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.
