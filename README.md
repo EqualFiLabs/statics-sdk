@@ -23,6 +23,12 @@ Public queue mining omits `prepared` and uses entropy below `2**87`. Prepared
 identities occupy a disjoint namespace and cannot be front-run through the queue.
 Independent markets expose `basketMarketConfigurationHash` for their commitment
 and `unwindBasketMarket` for terminal POL recovery without user-LP relocation.
+Use `encodeDeployBasketArbitrageReceiver` to obtain the protocol-deployed immutable
+NAV receiver and `encodeBasketArbitrage` for either canonical-pool direction.
+Restricted constituent top-ups need approval to the Diamond; ordinary constituent
+top-ups use approval to the receiver. Profits settle exactly to the executor and
+cannot spend preexisting receiver balances. Unregistered helpers have no restricted
+funding or return authority.
 
 `mineBasketHookSalts` accepts an `AbortSignal`, bounded chunks, and progress
 callbacks. Put `import "@statics-protocol/sdk/restricted-markets-worker";` in an

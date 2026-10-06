@@ -49,7 +49,31 @@ export const staticsRestrictedMarketsAbi = parseAbi([
   `function prepareBasketMarket(${marketTuple} params,uint256 hookNonce) returns (bytes32 preparationId,address hook)`,
   `function createBasketMarket(${marketTuple} params,bytes32 preparationId) payable returns (bytes32 poolId)`,
   "function unwindBasketMarket(bytes32 poolId)",
+  "function deployBasketArbitrageReceiver() returns (address receiver)",
+  "function beginBasketArbitrage(uint256 basketId,uint256 shares,address executor)",
+  "function settleBasketArbitrageInput(address token,address executor,uint256 amount)",
+  "function settleBasketArbitrageOutput(address token,address executor,uint256 amount)",
+  "function endBasketArbitrage()",
 ]);
+const v4PoolTuple = "(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)";
+export const staticsFlashArbitrageAbi = parseAbi([
+  `function executeMintAndSell(uint256 basketId,uint256 shares,${v4PoolTuple}[] pools,uint256[] basketAmountsIn,uint256[] minimumProfits,uint256 deadline) returns (address[] assets,uint256[] profits)`,
+  `function executeBuyAndRedeem(uint256 basketId,uint256 shares,${v4PoolTuple}[] pools,uint256[] constituentAmountsIn,uint256[] minimumProfits,uint256 deadline) returns (address[] assets,uint256[] profits)`,
+]);
+export type ArbitragePoolKey = { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address };
+
+export function encodeDeployBasketArbitrageReceiver(): Hex {
+  return encodeFunctionData({abi: staticsRestrictedMarketsAbi, functionName: "deployBasketArbitrageReceiver"});
+}
+export function encodeUnwindBasketMarket(poolId: Hex): Hex {
+  return encodeFunctionData({abi: staticsRestrictedMarketsAbi, functionName: "unwindBasketMarket", args: [poolId]});
+}
+export function encodeBasketArbitrage(direction: "mint-and-sell" | "buy-and-redeem", basketId: bigint, shares: bigint,
+  pools: readonly ArbitragePoolKey[], amounts: readonly bigint[], minimumProfits: readonly bigint[], deadline: bigint): Hex {
+  if (pools.length !== amounts.length || pools.length !== minimumProfits.length || pools.length === 0 || pools.length > 16) throw new Error("invalid arbitrage shape");
+  return encodeFunctionData({abi: staticsFlashArbitrageAbi, functionName: direction === "mint-and-sell" ? "executeMintAndSell" : "executeBuyAndRedeem",
+    args: [basketId, shares, pools, amounts, minimumProfits, deadline]});
+}
 
 /** Factory-bound, cross-chain protected raw CreateX salt. Constructor code is not part of prediction. */
 export function basketDeploymentSalt(factory: Address, entropy: bigint): Hex {

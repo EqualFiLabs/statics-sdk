@@ -7,6 +7,7 @@ import {
   encodeCreateBasketMarket, staticsBasketFactoryAbi, staticsRestrictedMarketsAbi,
   basketCreationConfigurationHash, encodePrepareBasketCreation, encodeCreateBasketPrepared,
   preparedBasketDeploymentSalt,
+  encodeBasketArbitrage, encodeDeployBasketArbitrageReceiver, staticsFlashArbitrageAbi,
 } from "../src/restricted-markets.js";
 import { installBasketMiningWorker, type HookMiningWorkerPort } from "../src/restricted-markets-worker.js";
 
@@ -59,6 +60,15 @@ describe("restricted basket identities", () => {
     expect(() => encodeEnqueueBasketSalts([fixture.hookSalt, fixture.hookSalt], true)).toThrow();
     const market = { tokenA: fixture.payer as Address, tokenB: fixture.creator as Address, lpFee: 3000, tickSpacing: 10, sqrtPriceBPerAX96: 1n << 96n, maximumCreationFee: 1n, deadline: 2_000_000_000n };
     expect(keccak256(encodeCreateBasketMarket(market, fixture.preparationId))).toBe(fixture.marketCalldataHash);
+  });
+  it("encodes typed NAV routes for the protocol-deployed receiver", () => {
+    expect(decodeFunctionData({abi: staticsRestrictedMarketsAbi, data: encodeDeployBasketArbitrageReceiver()}).functionName).toBe("deployBasketArbitrageReceiver");
+    const pools = [{currency0: fixture.payer as Address, currency1: fixture.creator as Address, fee: 3000, tickSpacing: 10, hooks: fixture.hookAddress as Address}];
+    for (const direction of ["mint-and-sell", "buy-and-redeem"] as const) {
+      const data = encodeBasketArbitrage(direction, 1n, 2n, pools, [3n], [4n], 5n);
+      expect(decodeFunctionData({abi: staticsFlashArbitrageAbi, data})).toEqual({functionName: direction === "mint-and-sell" ? "executeMintAndSell" : "executeBuyAndRedeem", args: [1n, 2n, pools, [3n], [4n], 5n]});
+    }
+    expect(() => encodeBasketArbitrage("mint-and-sell", 1n, 2n, pools, [], [4n], 5n)).toThrow("shape");
   });
   it("matches configuration and typed creation calldata hashes", () => {
     const params = { name: "Parity", symbol: "sP", assets: [fixture.payer as Address, fixture.creator as Address], bundleAmounts: [10n ** 18n, 2n * 10n ** 18n], mintFeeTiers: [{ minActionShares: 0n, feeShares: 1n }], redemptionFeeTiers: [], flashFeeBps: 5, originationFeeBps: 100, extensionFeeBps: 25, ltvBps: 9500, recoveryPenaltyBps: 500, loanDuration: 2592000 };
