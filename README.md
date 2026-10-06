@@ -1,5 +1,64 @@
 # Statics SDK
 
+## Restricted basket identities
+
+`basketDeploymentSalt`, `effectiveBasketSalt`, `predictBasketDeployment`, and
+`basketPreparationId` match the pinned CreateX CREATE3 factory. Token prediction
+does not include constructor arguments or the eventual basket ID. Always read
+the authoritative `basketCreationConfigurationHash` view and check
+`saltAvailable` before submitting a preparation. Offline mining finds candidates,
+not guarantees of address availability.
+
+Use `encodePrepareBasketCreation` followed by `encodeCreateBasketPrepared` with
+the mined token/hook nonce proofs and unchanged configuration. Derive identities
+with `preparedBasketDeploymentSalt(factory, chainId, diamond, intent, nonce)`.
+Mine prepared hooks with `{ prepared: { diamond, intent } }`; the complete intent
+includes the onchain configuration commitment, payer, creator, deadline and version.
+Additional independent
+markets use `encodePrepareBasketMarket` / `encodeCreateBasketMarket`. Legacy
+direct creation requires sufficient premined queue entries; replenish with
+`encodeEnqueueBasketSalts`. Restricted-token approvals do not authorize wallet
+transfers.
+Public queue mining omits `prepared` and uses entropy below `2**87`. Prepared
+identities occupy a disjoint namespace and cannot be front-run through the queue.
+Independent markets expose `basketMarketConfigurationHash` for their commitment
+and `unwindBasketMarket` for terminal POL recovery without user-LP relocation.
+Use `encodeDeployBasketArbitrageReceiver` to obtain the protocol-deployed immutable
+NAV receiver and `encodeBasketArbitrage` for either canonical-pool direction.
+Restricted constituent top-ups need approval to the Diamond; ordinary constituent
+top-ups use approval to the receiver. Profits settle exactly to the executor and
+cannot spend preexisting receiver balances. Unregistered helpers have no restricted
+funding or return authority.
+
+`mineBasketHookSalts` accepts an `AbortSignal`, bounded chunks, and progress
+callbacks. Put `import "@statics-protocol/sdk/restricted-markets-worker";` in an
+application worker entry file named `basket-mining.worker.ts`, then use your
+bundler's module-worker support:
+
+```ts
+const worker = new Worker(
+  new URL("./basket-mining.worker.ts", import.meta.url),
+  { type: "module" },
+);
+worker.postMessage({ type: "mine", id: "launch", options: { factory, chainId: 46630n } });
+// Cancel only this request; terminal responses have type "result" or "error".
+worker.postMessage({ type: "cancel", id: "launch" });
+```
+
+Serve/bundle the worker as an ESM asset using your application's worker loader.
+The main SDK import has no
+worker side effects. CLI users can build and run:
+
+```sh
+npm run build
+node scripts/mine-basket-hooks.mjs <factory> <chainId> [start] [count] [attempts]
+```
+
+Both worker and CLI use the same mining engine and Solidity parity fixtures.
+For prepared CLI mining, append a JSON object containing `diamond` and `intent`;
+encode its deadline and version as decimal strings. Results include the nonce
+proof needed by preparation. Without that object, CLI results are public queue salts.
+
 This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
 selling basket constituents.

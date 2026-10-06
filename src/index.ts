@@ -14,12 +14,14 @@ import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
 import { staticsPositionMarketAbi } from "./position-market.js";
+import { staticsRestrictedMarketsAbi } from "./restricted-markets.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
 export * from "./gauge-incentives.js";
 export * from "./market-tape.js";
 export * from "./position-market.js";
 export * from "./range-gauges.js";
+export * from "./restricted-markets.js";
 
 export const BPS = 10_000n;
 export const SHARE_SCALE = 10n ** 18n;
@@ -1317,6 +1319,7 @@ export function allowsExposureIncrease(status: BasketStatus): boolean {
 }
 
 export const staticsAbi = [
+  ...staticsRestrictedMarketsAbi,
   ...parseAbi([
   "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",

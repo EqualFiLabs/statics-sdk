@@ -10,6 +10,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": { "statics-mine-hooks": "./scripts/mine-basket-hooks.mjs" },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,10 +19,15 @@
     "./genesis-credit": {
       "types": "./dist/genesis-credit.d.ts",
       "import": "./dist/genesis-credit.js"
+    },
+    "./restricted-markets-worker": {
+      "types": "./dist/restricted-markets-worker.d.ts",
+      "import": "./dist/restricted-markets-worker.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts/mine-basket-hooks.mjs"
   ],
   "scripts": {
     "generate:config": "node scripts/generate-robinhood-config.mjs",
