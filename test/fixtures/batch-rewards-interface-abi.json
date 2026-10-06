@@ -1,0 +1,259 @@
+[
+  {
+    "type": "function",
+    "name": "batchClaimLimits",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "maxClaims",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxRewardEntries",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "batchClaimRewards",
+    "inputs": [
+      {
+        "name": "globalClaims",
+        "type": "tuple[]",
+        "internalType": "struct IStaticsBatchRewards.GlobalClaim[]",
+        "components": [
+          {
+            "name": "positionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "assets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "minimumAmounts",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ]
+      },
+      {
+        "name": "lpClaims",
+        "type": "tuple[]",
+        "internalType": "struct IStaticsBatchRewards.PoolClaim[]",
+        "components": [
+          {
+            "name": "positionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "poolId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "slots",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "minimumAmounts",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ]
+      },
+      {
+        "name": "allocatorClaims",
+        "type": "tuple[]",
+        "internalType": "struct IStaticsBatchRewards.PoolClaim[]",
+        "components": [
+          {
+            "name": "positionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "poolId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "slots",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "minimumAmounts",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ]
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "globalReceived",
+        "type": "uint256[][]",
+        "internalType": "uint256[][]"
+      },
+      {
+        "name": "lpReceived",
+        "type": "uint256[][]",
+        "internalType": "uint256[][]"
+      },
+      {
+        "name": "allocatorReceived",
+        "type": "uint256[][]",
+        "internalType": "uint256[][]"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "BatchClaimLimitExceeded",
+    "inputs": [
+      {
+        "name": "supplied",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maximum",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchClaimReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BatchClaimRouteUnavailable",
+    "inputs": [
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchRewardEntryLimitExceeded",
+    "inputs": [
+      {
+        "name": "supplied",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maximum",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchRewardLengthMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DuplicateBatchRewardAsset",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DuplicateBatchRewardSlot",
+    "inputs": [
+      {
+        "name": "slot",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DuplicateGlobalClaim",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DuplicatePoolClaim",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EmptyRewardBatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyRewardClaim",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBatchReceiver",
+    "inputs": [
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidBatchRewardSlot",
+    "inputs": [
+      {
+        "name": "slot",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  }
+]

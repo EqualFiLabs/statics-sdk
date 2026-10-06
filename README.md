@@ -428,3 +428,65 @@ recovery.
 `deployments/robinhood-chain-4663.json` before SDK builds and tests. It is the
 only SDK address binding for Robinhood's PoolManager, PositionManager, StateView,
 Quoter, Universal Router, Permit2, and WETH deployment.
+
+## Phase 1 batch reward claims
+
+The package root exports `staticsBatchRewardsAbi`, `BatchRewardClaims`,
+`BatchGlobalRewardClaim`, `BatchPoolRewardClaim`, `BatchRewardClaimResult`,
+`buildBatchClaimRewardsCall`, `decodeBatchClaimRewardsResult`,
+`buildBatchClaimLimitsCall`, `decodeBatchClaimLimitsResult`, and
+`splitBatchRewardClaims`. Both methods also appear in `staticsAbi`.
+
+One batch atomically claims global staking rewards, LP gauge rewards/LP bribes,
+and allocator bribes, in that category order and the submitted order within each
+category. It returns three nested arrays in the same asset/slot order. A failed
+claim rolls back every claim in that transaction. An entirely empty global
+reward group still reverts with the protocol's `NoRewards`; omit such groups
+after discovery rather than relying on a successful zero payout. LP and
+allocator claims keep their existing zero-reward behavior.
+
+The fixed input limits are `BATCH_REWARD_MAX_CLAIMS` (16 groups) and
+`BATCH_REWARD_MAX_ENTRIES` (64 requested assets/slots). LP slots are 0–4;
+allocator slots are 1–4. Duplicate groups in the same category and duplicate
+assets/slots are rejected. Amounts and PositionNFT IDs must fit uint256 and pool
+IDs must be bytes32. Pass the target Diamond as the optional second argument to
+the builder/splitter to reject it as a receiver locally. Onchain validation
+always rejects a zero or Diamond receiver.
+
+```ts
+import { splitBatchRewardClaims, staticsBatchRewardsAbi } from "@statics-protocol/sdk";
+
+// Discovery supplies current IDs, assets/slots and reviewed minimum amounts.
+const batches = splitBatchRewardClaims(claims, diamond);
+for (const batch of batches) {
+  const { request } = await publicClient.simulateContract({
+    address: diamond,
+    abi: staticsBatchRewardsAbi,
+    functionName: "batchClaimRewards",
+    args: [batch.globalClaims, batch.lpClaims, batch.allocatorClaims, batch.receiver],
+    account: connectedAccount,
+  });
+  // Estimate gas for this complete batch, obtain signing approval, then submit.
+  const hash = await walletClient.writeContract(request);
+  await publicClient.waitForTransactionReceipt({ hash });
+}
+```
+
+`splitBatchRewardClaims` is pure and deterministic. It copies inputs, splits
+oversized global asset groups while keeping asset/minimum pairing, and packs
+transactions within both limits without repeating a group in one transaction.
+It preserves receiver and execution order and discards no entries. Multiple
+transactions are independently atomic; the full split sequence is not atomic.
+These limits do not promise gas availability for arbitrary tokens or expensive
+settlement. Callers own discovery, account selection, gas estimation, additional
+gas-based splitting and submission. Simulate each **complete** batch with the
+connected account immediately before signing. Required bounded reward/gauge
+checkpoints remain separate actions; the helper does not catch up or forfeit.
+
+ABI parity fixtures come from `IStaticsBatchRewards` and
+`test/rewards/BatchRewardsAbi.t.sol` in the companion protocol change. Regenerate
+calldata/results with `WRITE_BATCH_REWARDS_FIXTURE=true forge test --match-path
+test/rewards/BatchRewardsAbi.t.sol`, copy the resulting
+`artifacts/diamond-manifests/batch-rewards-solidity.json`, and copy the interface
+ABI from `out/IStaticsBatchRewards.sol/IStaticsBatchRewards.json` into the SDK
+fixture directory. No package publication or production deployment is implied.

@@ -57,10 +57,16 @@ function unique(values: readonly string[], label: string): void {
   if (new Set(values).size !== values.length)
     throw new Error(`duplicate ${label}`);
 }
-function validate(input: BatchRewardClaims, bounded: boolean): void {
+function validate(
+  input: BatchRewardClaims,
+  bounded: boolean,
+  diamond?: Address,
+): void {
   if (
     !isAddress(input.receiver, { strict: false }) ||
-    /^0x0{40}$/i.test(input.receiver)
+    /^0x0{40}$/i.test(input.receiver) ||
+    (diamond !== undefined &&
+      input.receiver.toLowerCase() === diamond.toLowerCase())
   )
     throw new Error("invalid batch receiver");
   const count =
@@ -116,8 +122,11 @@ function validate(input: BatchRewardClaims, bounded: boolean): void {
   if (bounded && entries > BATCH_REWARD_MAX_ENTRIES)
     throw new Error("batch reward entry limit exceeded");
 }
-export function buildBatchClaimRewardsCall(input: BatchRewardClaims): Hex {
-  validate(input, true);
+export function buildBatchClaimRewardsCall(
+  input: BatchRewardClaims,
+  diamond?: Address,
+): Hex {
+  validate(input, true, diamond);
   return encodeFunctionData({
     abi: staticsBatchRewardsAbi,
     functionName: "batchClaimRewards",
@@ -158,8 +167,9 @@ export function decodeBatchClaimLimitsResult(
 /** Input limits only. Callers must simulate/estimate each complete batch and split further if needed. */
 export function splitBatchRewardClaims(
   input: BatchRewardClaims,
+  diamond?: Address,
 ): BatchRewardClaims[] {
-  validate(input, false);
+  validate(input, false, diamond);
   type MutableBatch = {
     globalClaims: BatchGlobalRewardClaim[];
     lpClaims: BatchPoolRewardClaim[];

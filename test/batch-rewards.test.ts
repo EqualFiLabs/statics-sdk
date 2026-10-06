@@ -51,6 +51,31 @@ const fixture = JSON.parse(
   ),
 ) as Record<string, Hex>;
 describe("batch rewards ABI", () => {
+  it("matches every function and error in the Solidity interface artifact", () => {
+    const abi = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/batch-rewards-interface-abi.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    // Solidity includes internalType annotations; compare the external ABI recursively.
+    const external = (item: unknown): unknown => {
+      if (Array.isArray(item)) return item.map(external);
+      if (item && typeof item === "object")
+        return Object.fromEntries(
+          Object.entries(item)
+            .filter(([key]) => key !== "internalType")
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, value]) => [key, external(value)]),
+        );
+      return item;
+    };
+    const sort = (items: readonly unknown[]) =>
+      [...items]
+        .map(external)
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    expect(sort(staticsBatchRewardsAbi)).toEqual(sort(abi));
+  });
   it("matches Solidity-generated calldata exactly", () => {
     const data = buildBatchClaimRewardsCall(input);
     expect(data).toBe(fixture.calldata);
