@@ -53,3 +53,64 @@ export function encodeMoshClaimMarketCancel(offerId: bigint): Hex {
 export function encodeMoshSyncFees(): Hex {
   return encodeFunctionData({abi: moshNativeSwarmAbi, functionName: "syncFees"});
 }
+
+export const moshShareRevenueAdapterAbi = parseAbi([
+  "function bindCampaign(address destination,uint256 index)",
+  "function sourceToken() view returns (address)",
+  "function swarm() view returns (address)",
+  "function market() view returns (address)",
+  "function shares(address owner) view returns (uint256)",
+  "function totalShares() view returns (uint256)",
+  "function pendingReturns(address owner) view returns (uint256 id,uint256 amount,bool active)",
+  "function unreconciledShares() view returns (uint256)",
+  "function campaignNativeReserved() view returns (uint256)",
+  "function userNativeReserved() view returns (uint256)",
+  "function totalMeasured() view returns (uint256)",
+  "function rewards(address owner) view returns (uint256)",
+  "function deposit(uint256 offerId,uint256 amount) payable",
+  "function withdraw(uint256 amount,uint256 deadline) returns (uint256 offerId)",
+  "function checkpointWithdrawal(address owner)",
+  "function cancelWithdrawal()",
+  "function sync() returns (uint256 received)",
+  "function flushCampaignRevenue() returns (uint256 amount)",
+  "function claimRewards() returns (uint256 amount)",
+  "event ClaimsDeposited(address indexed owner,uint256 indexed offerId,uint256 amount)",
+  "event ReturnListed(address indexed owner,uint256 indexed offerId,uint256 amount)",
+  "event ReturnReconciled(address indexed owner,uint256 indexed offerId,uint256 amount)",
+  "event ReturnCancelled(address indexed owner,uint256 indexed offerId)",
+  "event NativeRewardMeasured(uint256 amount,bool campaignOwned)",
+  "event RewardsClaimed(address indexed owner,uint256 amount)",
+]);
+
+export function buildMoshShareDepositCall(offerId: bigint, amount: bigint): {data: Hex; value: bigint} {
+  uint(offerId, 256n, "offer id");
+  uint(amount, 128n, "claim amount");
+  if (amount === 0n) throw new Error("empty claim deposit");
+  return {data: encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "deposit", args: [offerId, amount]}), value: 1n};
+}
+
+/** Lists the return only: fill the market offer as its owner, then permissionlessly reconcile it. */
+export function encodeMoshShareWithdrawal(amount: bigint, deadline: bigint): Hex {
+  uint(amount, 128n, "claim amount");
+  uint(deadline, 64n, "claim deadline");
+  if (amount === 0n || deadline === 0n) throw new Error("empty share withdrawal");
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "withdraw", args: [amount, deadline]});
+}
+
+export function encodeMoshShareCheckpoint(owner: Address): Hex {
+  if (!isAddress(owner) || owner === zeroAddress) throw new Error("invalid claim owner");
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "checkpointWithdrawal", args: [owner]});
+}
+
+export function encodeMoshShareCancel(): Hex {
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "cancelWithdrawal"});
+}
+export function encodeMoshShareSync(): Hex {
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "sync"});
+}
+export function encodeMoshShareFlush(): Hex {
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "flushCampaignRevenue"});
+}
+export function encodeMoshShareClaimRewards(): Hex {
+  return encodeFunctionData({abi: moshShareRevenueAdapterAbi, functionName: "claimRewards"});
+}

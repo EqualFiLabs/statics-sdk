@@ -527,3 +527,15 @@ at their deadline and still reserve listed claims until cancelled.
 `encodeMoshClaimMarketCancel` encodes seller cancellation; `encodeMoshSyncFees`
 cannot force PONS conversion. These helpers do not enable an unfinished pooled
 share adapter or promise historical trade-time reward ownership.
+
+For `MoshShareRevenueAdapter`, `buildMoshShareDepositCall` fills the user's
+buyer-bound offer through the adapter with explicit one-wei value.
+`encodeMoshShareWithdrawal` prepares a return listing. The owner fills that
+market offer using `buildMoshNativeCustodyFillCall`, then anyone submits
+`encodeMoshShareCheckpoint(owner)` to reconcile its cleared record before the
+next fill/movement. `encodeMoshShareCancel` cancels an unfilled/expired listing.
+No user scan or privileged keeper is required. `encodeMoshShareSync` measures
+realized native fees; `encodeMoshShareFlush` forwards only campaign reserves;
+`encodeMoshShareClaimRewards` pays the caller's terminal rewards and return
+proceeds as WETH. Earlier campaign reserves stay campaign-owned. Listings,
+fee contribution, principal recovery, and reward claims are distinct operations.

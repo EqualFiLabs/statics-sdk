@@ -40,4 +40,26 @@ describe("native Mosh custody", () => {
   it("exports from the root without a runtime dependency cycle", async () => {
     expect((await import("../src/index.js")).encodeMoshSyncFees()).toBe(fixture.sync);
   });
+  it("matches complete share adapter calldata against Solidity", () => {
+    expect(mosh.buildMoshShareDepositCall(42n, BigInt(fixture.amount))).toEqual({data: fixture.shareDeposit, value: 1n});
+    expect(mosh.encodeMoshShareWithdrawal(BigInt(fixture.amount), BigInt(fixture.deadline))).toBe(fixture.shareWithdraw);
+    expect(mosh.encodeMoshShareCheckpoint(fixture.buyer)).toBe(fixture.shareCheckpoint);
+    expect(mosh.encodeMoshShareCancel()).toBe(fixture.shareCancel);
+    expect(mosh.encodeMoshShareSync()).toBe(fixture.shareSync);
+    expect(mosh.encodeMoshShareFlush()).toBe(fixture.shareFlush);
+    expect(mosh.encodeMoshShareClaimRewards()).toBe(fixture.shareClaim);
+    expect(decodeFunctionData({abi: mosh.moshShareRevenueAdapterAbi, data: fixture.shareDeposit}).args)
+      .toEqual([42n, BigInt(fixture.amount)]);
+  });
+  it("bounds share movements and rejects an unbound reconciliation owner", () => {
+    for (const amount of [0n, -1n, 1n << 128n]) {
+      expect(() => mosh.buildMoshShareDepositCall(42n, amount)).toThrow();
+      expect(() => mosh.encodeMoshShareWithdrawal(amount, 1n)).toThrow();
+    }
+    for (const deadline of [0n, -1n, 1n << 64n]) {
+      expect(() => mosh.encodeMoshShareWithdrawal(1n, deadline)).toThrow();
+    }
+    expect(() => mosh.encodeMoshShareCheckpoint(zeroAddress)).toThrow();
+    expect(() => mosh.buildMoshShareDepositCall(-1n, 1n)).toThrow();
+  });
 });
