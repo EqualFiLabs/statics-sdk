@@ -487,3 +487,26 @@ recovery.
 `deployments/robinhood-chain-4663.json` before SDK builds and tests. It is the
 only SDK address binding for Robinhood's PoolManager, PositionManager, StateView,
 Quoter, Universal Router, Permit2, and WETH deployment.
+
+## Bootstrap and exact-output zaps
+
+Read the onchain `previewBasketLaunch` against the reserved BasketToken identity
+before funding. `previewBasketLaunch` in this SDK mirrors seed geometry, backing
+and mint-fee rounding; the onchain configuration remains authoritative.
+Use `basketCreationTypedData` for EOA or ERC-1271 creator authorization and
+`encodePrepareBasketCreationFor` / `encodeCreateBasketFor` for delegated creation.
+The authorization binds the payer, prepared deployment, complete configuration,
+nonce, expiry and native-fee bound.
+
+Campaign encoders create fixed-beneficiary campaigns, fund explicit launch or
+payment inventory, prepare reserved deployments, activate firm per-asset
+procurement, fill auctions, finalize POL, and claim terminal surplus.
+`quoteProcurementLiability` includes fragmented-fill rounding reserves.
+Suppliers receive project tokens immediately, not LP or refund rights.
+
+`encodeZapCampaignPurchase` and `encodeZapBasketMint` use separate destination
+entrypoints over typed v4 paths. Supply forward currency paths, complete
+PoolKeys, per-route input caps and one aggregate maximum. Native input uses the
+zero address and requires matching transaction value. Basket mint bounds are
+checked against the execution-time onchain quote; minted shares go directly to
+the receiver. Automatic route discovery and non-v4 conversions are not provided.
