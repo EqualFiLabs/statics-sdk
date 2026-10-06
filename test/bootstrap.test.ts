@@ -67,4 +67,8 @@ describe("bootstrap parity", () => {
     for (const action of ["finalize","claimTerminalInventory","fundNative"] as const)
       expect(decodeFunctionData({abi:bootstrap.basketBootstrapCampaignAbi,data:bootstrap.encodeCampaignAction(action)}).functionName).toBe(action);
   });
+  it("encodes fixed revenue binding and measured delivery", () => {
+    expect(decodeFunctionData({abi:bootstrap.measuredCampaignRevenueAbi,data:bootstrap.encodeBindRevenueCampaign(identity.diamond,1n)}).args).toEqual([identity.diamond,1n]);
+    expect(decodeFunctionData({abi:bootstrap.measuredCampaignRevenueAbi,data:bootstrap.encodeDeliverRealizedRevenue(7n)}).args).toEqual([7n]);
+  });
 });

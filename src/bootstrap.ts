@@ -153,6 +153,18 @@ export const staticsAssetZapAbi = parseAbi([
   `function mintBasket(${zapInput} input,uint256 basketId,uint256 shares,uint256[] maximumAssetAmounts,${routeTuple}[] routes) payable returns (uint256 inputSpent)`,
   `function purchaseCampaign(${zapInput} input,address campaignAddress,(uint256 auctionIndex,uint256 amount,uint256 minimumPayment)[] purchases,uint256 minimumTotalPayment,${routeTuple}[] routes) payable returns (uint256 inputSpent,uint256 payment)`,
 ]);
+export const measuredCampaignRevenueAbi = parseAbi([
+  "function bindCampaign(address destination,uint256 index)",
+  "function recipient() view returns (address)",
+  "function deliverRealized(uint256 amount)",
+  "function totalDelivered() view returns (uint256)",
+]);
+export function encodeBindRevenueCampaign(campaign: Address, index: bigint): Hex {
+  return encodeFunctionData({abi: measuredCampaignRevenueAbi, functionName: "bindCampaign", args: [campaign,index]});
+}
+export function encodeDeliverRealizedRevenue(amount: bigint): Hex {
+  return encodeFunctionData({abi: measuredCampaignRevenueAbi, functionName: "deliverRealized", args: [amount]});
+}
 export function encodeZapBasketMint(input: ZapInput, basketId: bigint, shares: bigint, maximums: readonly bigint[], routes: readonly ZapRoute[]): Hex {
   return encodeFunctionData({abi: staticsAssetZapAbi, functionName: "mintBasket", args: [input, basketId, shares, maximums, routes]});
 }
