@@ -510,3 +510,10 @@ PoolKeys, per-route input caps and one aggregate maximum. Native input uses the
 zero address and requires matching transaction value. Basket mint bounds are
 checked against the execution-time onchain quote; minted shares go directly to
 the receiver. Automatic route discovery and non-v4 conversions are not provided.
+
+`encodeBindRevenueCampaign` fixes the creator-approved destination and constituent.
+`encodeDeliverRealizedRevenue` forwards an explicit ERC-20 receipt. For the native
+delivery adapter, `buildDeliverNativeRevenueCall(amount)` returns `{ data, value }`
+for `deliverNative()`: the supplied ETH is wrapped and delivered as WETH. Existing
+adapter balances cannot fund the call. Delivery routes to the fixed beneficiary
+after success or expiry; these helpers do not harvest an external fee source.

@@ -165,6 +165,19 @@ export function encodeBindRevenueCampaign(campaign: Address, index: bigint): Hex
 export function encodeDeliverRealizedRevenue(amount: bigint): Hex {
   return encodeFunctionData({abi: measuredCampaignRevenueAbi, functionName: "deliverRealized", args: [amount]});
 }
+export const nativeCampaignRevenueAbi = parseAbi([
+  "function bindCampaign(address destination,uint256 index)",
+  "function recipient() view returns (address)",
+  "function deliverRealized(uint256 amount)",
+  "function deliverNative() payable",
+  "function totalDelivered() view returns (uint256)",
+  "function wethRuntimeHash() view returns (bytes32)",
+]);
+/** Native value is explicit and never inferred from adapter balances. */
+export function buildDeliverNativeRevenueCall(amount: bigint): {data: Hex; value: bigint} {
+  if (amount <= 0n || amount >= 1n << 256n) throw new Error("invalid native revenue amount");
+  return {data: encodeFunctionData({abi: nativeCampaignRevenueAbi, functionName: "deliverNative"}), value: amount};
+}
 export function encodeZapBasketMint(input: ZapInput, basketId: bigint, shares: bigint, maximums: readonly bigint[], routes: readonly ZapRoute[]): Hex {
   return encodeFunctionData({abi: staticsAssetZapAbi, functionName: "mintBasket", args: [input, basketId, shares, maximums, routes]});
 }

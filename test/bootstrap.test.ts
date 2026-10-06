@@ -71,4 +71,12 @@ describe("bootstrap parity", () => {
     expect(decodeFunctionData({abi:bootstrap.measuredCampaignRevenueAbi,data:bootstrap.encodeBindRevenueCampaign(identity.diamond,1n)}).args).toEqual([identity.diamond,1n]);
     expect(decodeFunctionData({abi:bootstrap.measuredCampaignRevenueAbi,data:bootstrap.encodeDeliverRealizedRevenue(7n)}).args).toEqual([7n]);
   });
+  it("matches native revenue calldata and keeps transaction value explicit", () => {
+    const call = bootstrap.buildDeliverNativeRevenueCall(7n);
+    expect(call).toEqual({data: fixture.nativeRevenueCalldata, value: 7n});
+    expect(decodeFunctionData({abi: bootstrap.nativeCampaignRevenueAbi, data: call.data}).functionName).toBe("deliverNative");
+    for (const amount of [0n, -1n, 1n << 256n]) {
+      expect(() => bootstrap.buildDeliverNativeRevenueCall(amount)).toThrow("invalid native revenue amount");
+    }
+  });
 });
