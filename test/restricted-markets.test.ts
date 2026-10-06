@@ -6,6 +6,7 @@ import {
   hasBasketHookPermissions, mineBasketHookSalts, encodeEnqueueBasketSalts,
   encodeCreateBasketMarket, staticsBasketFactoryAbi, staticsRestrictedMarketsAbi,
   basketCreationConfigurationHash, encodePrepareBasketCreation, encodeCreateBasketPrepared,
+  preparedBasketDeploymentSalt,
 } from "../src/restricted-markets.js";
 import { installBasketMiningWorker, type HookMiningWorkerPort } from "../src/restricted-markets-worker.js";
 
@@ -32,6 +33,21 @@ describe("restricted basket identities", () => {
     expect(() => effectiveBasketSalt(fixture.diamond, chainId, fixture.tokenSalt)).toThrow();
     expect(() => effectiveBasketSalt(factory, chainId, fixture.tokenSalt.replace("9001", "9000"))).toThrow();
   });
+  it("binds prepared identities to the entire intent and isolates them from the queue", async () => {
+    const intent = { payer: fixture.payer, creator: fixture.creator, configurationHash: fixture.configurationHash,
+      deadline: BigInt(fixture.deadline), version: 1n };
+    const salt = preparedBasketDeploymentSalt(factory, chainId, fixture.diamond, intent, 42n);
+    expect(salt).toBe(fixture.preparedTokenSalt);
+    expect(predictBasketDeployment(factory, chainId, salt).deployed).toBe(fixture.preparedTokenAddress);
+    expect(() => encodeEnqueueBasketSalts([salt], false)).toThrow("prepared salts");
+    expect(preparedBasketDeploymentSalt(factory, chainId, fixture.diamond, { ...intent, payer: fixture.creator }, 42n)).not.toBe(salt);
+    const [hook] = await mineBasketHookSalts({ factory, chainId, start: BigInt(fixture.preparedHookNonce), attempts: 1n,
+      prepared: { diamond: fixture.diamond, intent } });
+    expect(hook.salt).toBe(fixture.preparedHookSalt);
+    expect(hook.address).toBe(fixture.preparedHookAddress);
+    expect(hook.nonce).toBe(BigInt(fixture.preparedHookNonce));
+    await expect(mineBasketHookSalts({factory, chainId, start: 1n << 87n, attempts: 1n})).rejects.toThrow("bounds");
+  });
   it("mines the actual effective salt and finds a deterministic fixture", async () => {
     const results = await mineBasketHookSalts({ factory, chainId, start: 4738n, attempts: 2n });
     expect(results).toEqual([{ entropy: 4739n, salt: fixture.hookSalt, address: fixture.hookAddress }]);
@@ -50,7 +66,7 @@ describe("restricted basket identities", () => {
     const maxima = [10n * 10n ** 18n, 20n * 10n ** 18n];
     const deadline = 2000000000n;
     expect(basketCreationConfigurationHash(params, pools, maxima, deadline, fixture.environmentHash)).toBe(fixture.creationConfigurationHash);
-    expect(keccak256(encodePrepareBasketCreation(params, pools, maxima, deadline, fixture.tokenSalt, [fixture.hookSalt, fixture.tokenSalt]))).toBe(fixture.prepareCalldataHash);
+    expect(keccak256(encodePrepareBasketCreation(params, pools, maxima, deadline, 42n, [4739n, 42n]))).toBe(fixture.prepareCalldataHash);
     expect(keccak256(encodeCreateBasketPrepared(params, pools, maxima, deadline, fixture.preparationId))).toBe(fixture.createCalldataHash);
   });
   it("cancels a mining worker between bounded chunks", async () => {

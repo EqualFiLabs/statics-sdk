@@ -10,11 +10,19 @@ the authoritative `basketCreationConfigurationHash` view and check
 not guarantees of address availability.
 
 Use `encodePrepareBasketCreation` followed by `encodeCreateBasketPrepared` with
-the reserved identities and unchanged configuration. Additional independent
+the mined token/hook nonce proofs and unchanged configuration. Derive identities
+with `preparedBasketDeploymentSalt(factory, chainId, diamond, intent, nonce)`.
+Mine prepared hooks with `{ prepared: { diamond, intent } }`; the complete intent
+includes the onchain configuration commitment, payer, creator, deadline and version.
+Additional independent
 markets use `encodePrepareBasketMarket` / `encodeCreateBasketMarket`. Legacy
 direct creation requires sufficient premined queue entries; replenish with
 `encodeEnqueueBasketSalts`. Restricted-token approvals do not authorize wallet
 transfers.
+Public queue mining omits `prepared` and uses entropy below `2**87`. Prepared
+identities occupy a disjoint namespace and cannot be front-run through the queue.
+Independent markets expose `basketMarketConfigurationHash` for their commitment
+and `unwindBasketMarket` for terminal POL recovery without user-LP relocation.
 
 `mineBasketHookSalts` accepts an `AbortSignal`, bounded chunks, and progress
 callbacks. Put `import "@statics-protocol/sdk/restricted-markets-worker";` in an
@@ -41,6 +49,9 @@ node scripts/mine-basket-hooks.mjs <factory> <chainId> [start] [count] [attempts
 ```
 
 Both worker and CLI use the same mining engine and Solidity parity fixtures.
+For prepared CLI mining, append a JSON object containing `diamond` and `intent`;
+encode its deadline and version as decimal strings. Results include the nonce
+proof needed by preparation. Without that object, CLI results are public queue salts.
 
 This package mirrors Statics static-basket rounding, builds calldata for the
 single user-facing `StaticsDiamond`, and defines an adapter for sourcing or
