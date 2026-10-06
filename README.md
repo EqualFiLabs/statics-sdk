@@ -525,8 +525,8 @@ Inspect the pinned market's offer and fee before submitting. Listing leaves
 claims with the seller until the designated buyer fills; offers expire strictly
 at their deadline and still reserve listed claims until cancelled.
 `encodeMoshClaimMarketCancel` encodes seller cancellation; `encodeMoshSyncFees`
-cannot force PONS conversion. These helpers do not enable an unfinished pooled
-share adapter or promise historical trade-time reward ownership.
+cannot force PONS conversion. These market encoders alone do not implement
+reward accounting or promise historical trade-time reward ownership.
 
 For `MoshShareRevenueAdapter`, `buildMoshShareDepositCall` fills the user's
 buyer-bound offer through the adapter with explicit one-wei value.
@@ -539,3 +539,18 @@ realized native fees; `encodeMoshShareFlush` forwards only campaign reserves;
 `encodeMoshShareClaimRewards` pays the caller's terminal rewards and return
 proceeds as WETH. Earlier campaign reserves stay campaign-owned. Listings,
 fee contribution, principal recovery, and reward claims are distinct operations.
+
+`encodePonsRevenueCollect` collects a bounded amount of realized escrow credit;
+`encodePonsRevenueHandoff` independently transfers terminal fee rights to the
+fixed beneficiary. Escrow credits are recipient-aggregated, not token-attributed.
+`encodeMoshTeamBindSource` binds a newly launched source naming the adapter as
+team recipient. For existing sources, `buildMoshTeamHandoffCall` fills an
+authorized one-wei listing of the selected permanent team claims.
+`encodeMoshTeamSync` measures receipts and `encodeMoshTeamFlush` delivers them.
+These adapters require their supported runtime-pinned source generation;
+they cannot force upstream conversion or access Swarm principal.
+
+Restricted campaign currencies require a governance-approved, runtime-pinned
+campaign factory. Approve the Statics Diamond, not the campaign or zap, for
+direct restricted-token funding. Settlement uses exact transaction-local
+custody authorization; approvals alone never authorize arbitrary transfers.

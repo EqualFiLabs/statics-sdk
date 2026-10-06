@@ -101,6 +101,7 @@ export const basketBootstrapFactoryAbi = parseAbi([
   "function isCampaign(address campaign) view returns (bool)", "function diamond() view returns (address)",
 ]);
 export const basketBootstrapCampaignAbi = parseAbi([
+  "function factory() view returns (address)", "function custodyAsset(uint256 index) view returns (address)",
   "function state() view returns (uint8)", "function ready() view returns (bool)",
   `function configuration() view returns (${basketTuple},${poolTuple}[],uint256[])`,
   "function termsHash() view returns (bytes32)", "function preparedToken() view returns (address)",

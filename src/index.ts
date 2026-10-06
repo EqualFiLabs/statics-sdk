@@ -16,6 +16,7 @@ import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
 import { staticsPositionMarketAbi } from "./position-market.js";
 import { staticsRestrictedMarketsAbi } from "./restricted-markets.js";
 import { staticsBootstrapAbi } from "./bootstrap.js";
+import { staticsBootstrapSettlementAbi } from "./venue-revenue.js";
 import { getSqrtPriceAtTick, quoteRangeAmounts } from "./v4-math.js";
 export { getSqrtPriceAtTick, quoteRangeAmounts } from "./v4-math.js";
 
@@ -27,6 +28,7 @@ export * from "./range-gauges.js";
 export * from "./restricted-markets.js";
 export * from "./bootstrap.js";
 export * from "./mosh.js";
+export * from "./venue-revenue.js";
 
 export const BPS = 10_000n;
 export const SHARE_SCALE = 10n ** 18n;
@@ -1256,6 +1258,7 @@ export function allowsExposureIncrease(status: BasketStatus): boolean {
 
 export const staticsAbi = [
   ...staticsBootstrapAbi,
+  ...staticsBootstrapSettlementAbi,
   ...staticsRestrictedMarketsAbi,
   ...parseAbi([
   "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
