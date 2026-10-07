@@ -10,7 +10,7 @@ import {
   type ContractEventArgs,
   type Hex,
 } from "viem";
-import { staticsBatchRewardsAbi } from "./batch-rewards.js";
+import { staticsBatchRewardsAbi, staticsAggregatedBatchRewardsAbi } from "./batch-rewards.js";
 import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
@@ -1320,6 +1320,7 @@ export function allowsExposureIncrease(status: BasketStatus): boolean {
 
 export const staticsAbi = [
   ...staticsBatchRewardsAbi,
+  ...staticsAggregatedBatchRewardsAbi,
   ...parseAbi([
   "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
