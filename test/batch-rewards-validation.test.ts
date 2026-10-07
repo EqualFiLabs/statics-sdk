@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { decodeFunctionData, type Address, type Hex } from "viem";
 import {
   buildBatchClaimRewardsCall,
+  buildBatchClaimRewardsAggregatedCall,
+  staticsAggregatedBatchRewardsAbi,
   splitBatchRewardClaims,
   staticsBatchRewardsAbi,
   BATCH_REWARD_MAX_CLAIMS,
@@ -30,16 +32,19 @@ const input = (): BatchRewardClaims => ({
   receiver: address(999),
 });
 
-describe("batch reward validation", () => {
+describe.each([
+  ["legacy", buildBatchClaimRewardsCall],
+  ["aggregated", buildBatchClaimRewardsAggregatedCall],
+] as const)("%s batch reward validation", (_name, build) => {
   it("rejects empty input, bad receiver, and known diamond receiver", () => {
     expect(() =>
-      buildBatchClaimRewardsCall({ ...input(), globalClaims: [] }),
+      build({ ...input(), globalClaims: [] }),
     ).toThrow("empty reward batch");
     for (const receiver of [address(0), "0x1234" as Address])
       expect(() =>
-        buildBatchClaimRewardsCall({ ...input(), receiver }),
+        build({ ...input(), receiver }),
       ).toThrow("receiver");
-    expect(() => buildBatchClaimRewardsCall(input(), address(999))).toThrow(
+    expect(() => build(input(), address(999))).toThrow(
       "receiver",
     );
     expect(() => splitBatchRewardClaims(input(), address(999))).toThrow(
@@ -49,35 +54,35 @@ describe("batch reward validation", () => {
   it("validates uint256 bounds and reward arrays", () => {
     for (const positionId of [-1n, 1n << 256n, 1 as unknown as bigint])
       expect(() =>
-        buildBatchClaimRewardsCall({
+        build({
           ...input(),
           globalClaims: [{ ...global(1), positionId }],
         }),
       ).toThrow("uint256");
     for (const minimum of [-1n, 1n << 256n])
       expect(() =>
-        buildBatchClaimRewardsCall({
+        build({
           ...input(),
           globalClaims: [{ ...global(1), minimumAmounts: [minimum] }],
         }),
       ).toThrow("uint256");
     expect(() =>
-      buildBatchClaimRewardsCall({ ...input(), globalClaims: [global(1, 0)] }),
+      build({ ...input(), globalClaims: [global(1, 0)] }),
     ).toThrow("empty reward claim");
     expect(() =>
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: [{ ...global(1), minimumAmounts: [] }],
       }),
     ).toThrow("length");
     expect(() =>
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: [{ ...global(1), assets: ["0x12" as Address] }],
       }),
     ).toThrow("asset");
     expect(
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: [
           {
@@ -91,14 +96,14 @@ describe("batch reward validation", () => {
   });
   it("rejects duplicate groups and case-insensitive assets/pools", () => {
     expect(() =>
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: [global(1), global(1)],
       }),
     ).toThrow("duplicate global");
     const mixed = address(0xabcdef);
     expect(() =>
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: [
           {
@@ -125,7 +130,7 @@ describe("batch reward validation", () => {
       ).toThrow("duplicate pool");
     }
     expect(
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         lpClaims: [lp(1)],
         allocatorClaims: [{ ...lp(1), slots: [1] }],
@@ -136,7 +141,7 @@ describe("batch reward validation", () => {
     for (const category of ["lpClaims", "allocatorClaims"] as const) {
       for (const slots of [[], [1, 1], [5], [-1], [1.5]])
         expect(() =>
-          buildBatchClaimRewardsCall({
+          build({
             ...input(),
             [category]: [
               { ...lp(1), slots, minimumAmounts: slots.map(() => 0n) },
@@ -144,43 +149,43 @@ describe("batch reward validation", () => {
           }),
         ).toThrow();
       expect(() =>
-        buildBatchClaimRewardsCall({
+        build({
           ...input(),
           [category]: [{ ...lp(1), slots: [1], minimumAmounts: [] }],
         }),
       ).toThrow("length");
       expect(() =>
-        buildBatchClaimRewardsCall({
+        build({
           ...input(),
           [category]: [{ ...lp(1), poolId: "0x1234", slots: [1] }],
         }),
       ).toThrow("bytes32");
       expect(() =>
-        buildBatchClaimRewardsCall({
+        build({
           ...input(),
           [category]: [{ ...lp(1), slots: [1], minimumAmounts: [-1n] }],
         }),
       ).toThrow("uint256");
     }
     expect(() =>
-      buildBatchClaimRewardsCall({ ...input(), allocatorClaims: [lp(1)] }),
+      build({ ...input(), allocatorClaims: [lp(1)] }),
     ).toThrow("slot");
     expect(
-      buildBatchClaimRewardsCall({ ...input(), lpClaims: [lp(1, 5)] }),
+      build({ ...input(), lpClaims: [lp(1, 5)] }),
     ).toMatch(/^0x/);
   });
   it("enforces both independent transaction limits", () => {
     expect(() =>
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: Array.from({ length: 17 }, (_, i) => global(i)),
       }),
     ).toThrow("claim limit");
     expect(() =>
-      buildBatchClaimRewardsCall({ ...input(), globalClaims: [global(1, 65)] }),
+      build({ ...input(), globalClaims: [global(1, 65)] }),
     ).toThrow("entry limit");
     expect(
-      buildBatchClaimRewardsCall({
+      build({
         ...input(),
         globalClaims: Array.from({ length: 16 }, (_, i) => global(i, 4)),
       }),
@@ -242,6 +247,12 @@ describe("batch reward splitting", () => {
         data: buildBatchClaimRewardsCall(b),
       });
       expect(decoded.functionName).toBe("batchClaimRewards");
+      const aggregated = decodeFunctionData({
+        abi: staticsAggregatedBatchRewardsAbi,
+        data: buildBatchClaimRewardsAggregatedCall(b),
+      });
+      expect(aggregated.functionName).toBe("batchClaimRewardsAggregated");
+      expect(aggregated.args).toEqual(decoded.args);
     }
     for (const category of [
       "globalClaims",
