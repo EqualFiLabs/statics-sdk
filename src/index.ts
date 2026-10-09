@@ -1,4 +1,5 @@
 import {
+  decodeFunctionResult,
   concatHex,
   encodeAbiParameters,
   encodeFunctionData,
@@ -1353,6 +1354,9 @@ export const staticsAbi = [
   "function distributeTreasuryFees(address asset) returns (uint256 amount)",
   "function rewardAsset(address asset) view returns ((uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint256 indexRay,uint256 indexedReserve,uint256 totalClaimable) state)",
   "function maxRewardAssetsPerPosition() pure returns (uint256)",
+  "function nonSwapStakerShareBps() view returns (uint16)",
+  "function setNonSwapStakerShareBps(uint16 shareBps)",
+  "error InvalidNonSwapStakerShareBps(uint256 shareBps)",
   "function rewardEligibilityDelay() pure returns (uint256)",
   "function rewardEligibilityBucketSize() pure returns (uint256)",
   "function stakingToken() view returns (address)",
@@ -1612,7 +1616,8 @@ export const staticsAbi = [
   "event GlobalFeeAccrued(address indexed asset,uint256 grossFee,uint256 stakerAmount,uint256 treasuryAmount,uint256 indexRay)",
   "event SwapRewardCrystallized(address indexed asset,uint256 amount,uint256 eligibleWeight,uint256 indexRay,uint256 unfundedAmount)",
   "event SwapRewardFunded(address indexed asset,uint256 amount,uint256 unfundedAmount)",
-  "event RewardClaimed(uint256 indexed positionId,address indexed receiver,address indexed asset,uint256 amount)",
+  "event NonSwapStakerShareBpsSet(uint16 previousShareBps,uint16 newShareBps)",
+  "event RewardClaimed(uint256 indexed positionId,address indexed receiver,address indexed asset,uint256 debited,uint256 received)",
   "event TreasuryFeesDistributed(address indexed asset,address indexed treasury,uint256 amount)",
   "event RewardAssetOptedIn(uint256 indexed positionId,address indexed asset,uint256 actualPendingStake,uint256 effectivePendingWeight,uint40 eligibleAt)",
   "event RewardStakeScheduled(uint256 indexed positionId,address indexed asset,uint256 actualPendingStake,uint256 effectivePendingWeight,uint40 eligibleAt)",
@@ -1906,6 +1911,7 @@ export type StaticsLiquidityEventName =
   | "SwapRewardCrystallized"
   | "SwapRewardFunded"
   | "RewardClaimed"
+  | "NonSwapStakerShareBpsSet"
   | "TreasuryFeesDistributed"
   | "RewardAssetOptedIn"
   | "RewardStakeScheduled"
@@ -4621,4 +4627,20 @@ export async function planRedeemUnderlyingRoutes(
     const route = await adapter.quoteExactInput({ tokenIn: asset, tokenOut: destinationToken, amountIn: amountOut });
     return { asset, amount: amountOut, sourceOrDestinationAmount: route.minAmountOut, execution: route.execution };
   }));
+}
+
+/** Configure only subsequent non-swap fees; the complementary share belongs to treasury. */
+export function buildSetNonSwapStakerShareBpsCall(shareBps: number): Hex {
+  if (!Number.isInteger(shareBps) || shareBps < 0 || shareBps > 10_000) {
+    throw new Error("Non-swap staker share must be an integer from 0 to 10000 basis points.");
+  }
+  return encodeFunctionData({ abi: staticsAbi, functionName: "setNonSwapStakerShareBps", args: [shareBps] });
+}
+
+export function buildNonSwapStakerShareBpsCall(): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "nonSwapStakerShareBps" });
+}
+
+export function decodeNonSwapStakerShareBpsResult(data: Hex): number {
+  return decodeFunctionResult({ abi: staticsAbi, functionName: "nonSwapStakerShareBps", data });
 }

@@ -1,0 +1,510 @@
+[
+  {
+    "type": "event",
+    "name": "ManagedLiquidityChanged",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "posmTokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "movement",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IStaticsRangeGauge.LiquidityStatementMovement",
+        "components": [
+          {
+            "name": "liquidityBefore",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "liquidityAfter",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "paid0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "paid1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received1",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ManagedLiquidityExited",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "posmTokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "movement",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IStaticsRangeGauge.LiquidityStatementMovement",
+        "components": [
+          {
+            "name": "liquidityBefore",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "liquidityAfter",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "paid0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "paid1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received1",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ManagedLiquidityFeesCollected",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "posmTokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "amount0",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount1",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ManagedLiquidityProvided",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "posmTokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "manager",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "tickLower",
+        "type": "int24",
+        "indexed": false,
+        "internalType": "int24"
+      },
+      {
+        "name": "tickUpper",
+        "type": "int24",
+        "indexed": false,
+        "internalType": "int24"
+      },
+      {
+        "name": "movement",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IStaticsRangeGauge.LiquidityStatementMovement",
+        "components": [
+          {
+            "name": "liquidityBefore",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "liquidityAfter",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "paid0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "paid1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received1",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ManagedLiquidityRebalanced",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "oldPosmTokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newPosmTokenId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "manager",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "tickLower",
+        "type": "int24",
+        "indexed": false,
+        "internalType": "int24"
+      },
+      {
+        "name": "tickUpper",
+        "type": "int24",
+        "indexed": false,
+        "internalType": "int24"
+      },
+      {
+        "name": "movement",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IStaticsRangeGauge.LiquidityStatementMovement",
+        "components": [
+          {
+            "name": "liquidityBefore",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "liquidityAfter",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "receiver",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "paid0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "paid1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "received1",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "settlement",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IStaticsRangeGauge.RebalanceSettlement",
+        "components": [
+          {
+            "name": "withdrawn0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "withdrawn1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "mintSpent0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "mintReceived0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "mintSpent1",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "mintReceived1",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PositionGaugeAllocationsSet",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nextAllocationAt",
+        "type": "uint40",
+        "indexed": true,
+        "internalType": "uint40"
+      },
+      {
+        "name": "totalAllocated",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolIds",
+        "type": "bytes32[]",
+        "indexed": false,
+        "internalType": "PoolId[]"
+      },
+      {
+        "name": "amounts",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RewardClaimed",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "asset",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "debited",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "received",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "NonSwapStakerShareBpsSet",
+    "inputs": [
+      {
+        "name": "previousShareBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "newShareBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      }
+    ],
+    "anonymous": false
+  }
+]
