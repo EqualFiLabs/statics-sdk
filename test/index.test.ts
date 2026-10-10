@@ -450,8 +450,8 @@ describe("standalone Statics Genesis", () => {
 describe("Statics static basket quotes", () => {
   it("splits fees across four configurable shares with the fixed creator carve and fallback routes", () => {
     const configuration = {
-      inputFeeBps: 25n,
-      outputFeeBps: 25n,
+      inputFeePips: 25n,
+      outputFeePips: 25n,
       polShareBps: 1_500n,
       basketStakerShareBps: 3_000n,
       staticsStakerShareBps: 3_000n,
@@ -482,16 +482,16 @@ describe("Statics static basket quotes", () => {
 
   it("rejects swap fee splits whose configurable shares do not total 9500 BPS", () => {
     expect(() => splitSwapFee(100n, {
-      inputFeeBps: 25n,
-      outputFeeBps: 25n,
+      inputFeePips: 25n,
+      outputFeePips: 25n,
       polShareBps: 1_500n,
       basketStakerShareBps: 3_000n,
       staticsStakerShareBps: 3_000n,
       treasuryShareBps: 1_999n,
     }, true, true)).toThrow("invalid swap fee split");
     expect(() => splitSwapFee(100n, {
-      inputFeeBps: 25n,
-      outputFeeBps: 25n,
+      inputFeePips: 25n,
+      outputFeePips: 25n,
       polShareBps: -1_000n,
       basketStakerShareBps: 500n,
       staticsStakerShareBps: 500n,
@@ -572,13 +572,14 @@ describe("Statics static basket quotes", () => {
   });
 
   it("quotes exact-input and exact-output bilateral fees with native LP fees", () => {
+    expect(effectiveCanonicalFees(50n, 25n, 25n)).toEqual({ lpFeePips: 50n, inputFeePips: 25n, outputFeePips: 25n });
     expect(quoteExactInputHookFee(1n, 1n)).toBe(1n);
-    expect(quoteExactInputHookFee(10_001n, 1n)).toBe(2n);
-    expect(quoteExactOutputHookFee(10_000n, 100n)).toBe(102n);
+    expect(quoteExactInputHookFee(1_000_001n, 1n)).toBe(2n);
+    expect(quoteExactOutputHookFee(10_000n, 100n)).toBe(2n);
     expect(effectiveCanonicalFees(3_000n, 25n, 25n)).toEqual({
       lpFeePips: 3_000n,
-      inputFeeBps: 25n,
-      outputFeeBps: 25n,
+      inputFeePips: 25n,
+      outputFeePips: 25n,
     });
     expect(effectiveCanonicalFees(3_001n, 25n, 25n).lpFeePips).toBe(3_001n);
     expect(() => effectiveCanonicalFees(1_000_000n, 25n, 25n))
@@ -588,7 +589,7 @@ describe("Statics static basket quotes", () => {
   it("encodes permissionless protocol pool creation, administration and generic manager calls", () => {
     const poolId = `0x${"11".repeat(32)}` as const;
     const manager = "0x0000000000000000000000000000000000000006";
-    const feeRate = { inputFeeBps: 40n, outputFeeBps: 60n };
+    const feeRate = { inputFeePips: 40n, outputFeePips: 60n };
     const createParams = {
       tokenA: assetA,
       tokenB: assetB,
@@ -612,7 +613,7 @@ describe("Statics static basket quotes", () => {
     });
     expect(createData.functionName).toBe("createPool");
     expect(createData.args?.[0]).toMatchObject({
-      initialFeeRate: { inputFeeBps: 40, outputFeeBps: 60 },
+      initialFeeRate: { inputFeePips: 40, outputFeePips: 60 },
     });
     expect(createData.args?.[1]).toBe("0xabcd");
     expect(decodeFunctionData({
@@ -628,8 +629,19 @@ describe("Statics static basket quotes", () => {
       .toThrow("tick spacing outside protocol bounds");
     expect(() => buildCreatePoolTransaction({
       ...createParams,
-      initialFeeRate: { inputFeeBps: 100n, outputFeeBps: 101n },
-    }, 0n)).toThrow("combined pool fee rate exceeds 200 BPS");
+      initialFeeRate: { inputFeePips: 10_000n, outputFeePips: 10_001n },
+    }, 0n)).toThrow("combined pool fee rate exceeds 20000 pips");
+    expect(() => buildCreatePoolTransaction({
+      ...createParams,
+      initialFeeRate: { inputFeePips: 9n, outputFeePips: 10n },
+    }, 0n)).toThrow("creator hook fee must be at least 10 pips per leg");
+    expect(decodeFunctionData({
+      abi: staticsAbi,
+      data: buildCreatePoolTransaction({
+        ...createParams,
+        initialFeeRate: { inputFeePips: 10n, outputFeePips: 10n },
+      }, 0n).data,
+    }).functionName).toBe("createPool");
     expect(() => buildCreatePoolTransaction(createParams, -1n)).toThrow("totalNativeFee exceeds uint256");
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildInvalidatePoolCreationNonceCall(9n) }))
@@ -638,13 +650,13 @@ describe("Statics static basket quotes", () => {
       .toEqual({ functionName: "setPoolCreationFee", args: [1_000n] });
 
     expect(decodeFunctionData({ abi: staticsAbi, data: buildSetProtocolPoolFeeRateCall(poolId, feeRate) }))
-      .toEqual({ functionName: "setProtocolPoolFeeRate", args: [poolId, { inputFeeBps: 40, outputFeeBps: 60 }] });
+      .toEqual({ functionName: "setProtocolPoolFeeRate", args: [poolId, { inputFeePips: 40, outputFeePips: 60 }] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildSetDefaultProtocolPoolFeeRateCall(feeRate) }))
-      .toEqual({ functionName: "setDefaultProtocolPoolFeeRate", args: [{ inputFeeBps: 40, outputFeeBps: 60 }] });
+      .toEqual({ functionName: "setDefaultProtocolPoolFeeRate", args: [{ inputFeePips: 40, outputFeePips: 60 }] });
     expect(decodeFunctionData({ abi: staticsAbi, data: buildClearProtocolPoolFeeRateCall(poolId) }))
       .toEqual({ functionName: "clearProtocolPoolFeeRate", args: [poolId] });
-    expect(() => buildSetProtocolPoolFeeRateCall(poolId, { inputFeeBps: 150n, outputFeeBps: 60n }))
-      .toThrow("combined pool fee rate exceeds 200 BPS");
+    expect(() => buildSetProtocolPoolFeeRateCall(poolId, { inputFeePips: 15_000n, outputFeePips: 6_000n }))
+      .toThrow("combined pool fee rate exceeds 20000 pips");
 
     const basketAllocation = {
       polShareBps: 1_500n,
@@ -944,8 +956,8 @@ describe("Statics static basket quotes", () => {
     const message = {
       poolId,
       sqrtPriceX96: Q96,
-      inputFeeBps: 40n,
-      outputFeeBps: 60n,
+      inputFeePips: 40n,
+      outputFeePips: 60n,
       creator: receiver,
       activateManagedPol: true,
       nonce: 7n,
@@ -955,7 +967,7 @@ describe("Statics static basket quotes", () => {
     const typedData = buildCreatePoolAuthorizationTypedData(chainId, diamond, message);
     expect(typedData.domain).toEqual({
       name: "Statics Protocol Pools",
-      version: "4",
+      version: "5",
       chainId,
       verifyingContract: diamond,
     });
@@ -963,8 +975,8 @@ describe("Statics static basket quotes", () => {
     expect(typedData.types.CreatePool.map((f) => f.name)).toEqual([
       "poolId",
       "sqrtPriceX96",
-      "inputFeeBps",
-      "outputFeeBps",
+      "inputFeePips",
+      "outputFeePips",
       "creator",
       "activateManagedPol",
       "nonce",
@@ -986,7 +998,7 @@ describe("Statics static basket quotes", () => {
         lpFee: 3_000,
         tickSpacing: 60,
         sqrtPriceBPerAX96: Q96,
-        initialFeeRate: { inputFeeBps: 40n, outputFeeBps: 60n },
+        initialFeeRate: { inputFeePips: 40n, outputFeePips: 60n },
         creator: receiver,
         activateManagedPol: true,
         nonce: 7n,
@@ -1009,8 +1021,8 @@ describe("Statics static basket quotes", () => {
     const base = {
       poolId: `0x${"11".repeat(32)}` as const,
       sqrtPriceX96: Q96,
-      inputFeeBps: 40n,
-      outputFeeBps: 60n,
+      inputFeePips: 40n,
+      outputFeePips: 60n,
       creator: receiver,
       activateManagedPol: false,
       nonce: 1n,
@@ -1023,8 +1035,8 @@ describe("Statics static basket quotes", () => {
     ).not.toBe(baseDigest);
     expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, nonce: 2n })).not.toBe(baseDigest);
     expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, sqrtPriceX96: Q96 + 1n })).not.toBe(baseDigest);
-    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, inputFeeBps: 41n })).not.toBe(baseDigest);
-    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, outputFeeBps: 61n })).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, inputFeePips: 41n })).not.toBe(baseDigest);
+    expect(computeCreatePoolAuthorizationDigest(1, diamond, { ...base, outputFeePips: 61n })).not.toBe(baseDigest);
   });
 
   it("decodes permissionless protocol pool and creator-revenue events", () => {
@@ -1045,11 +1057,11 @@ describe("Statics static basket quotes", () => {
     const invalidated = encodeEventArgs("PoolCreationNonceInvalidated", { creator: receiver, nonce: 7n });
     expect(invalidated.args).toMatchObject({ creator: receiver, nonce: 7n });
 
-    const feeRateSet = encodeEventArgs("ProtocolPoolFeeRateSet", { poolId, inputFeeBps: 40, outputFeeBps: 60 });
-    expect(feeRateSet.args).toMatchObject({ poolId, inputFeeBps: 40, outputFeeBps: 60 });
+    const feeRateSet = encodeEventArgs("ProtocolPoolFeeRateSet", { poolId, inputFeePips: 40, outputFeePips: 60 });
+    expect(feeRateSet.args).toMatchObject({ poolId, inputFeePips: 40, outputFeePips: 60 });
 
-    const defaultSet = encodeEventArgs("DefaultProtocolPoolFeeRateSet", { inputFeeBps: 25, outputFeeBps: 25 });
-    expect(defaultSet.args).toMatchObject({ inputFeeBps: 25, outputFeeBps: 25 });
+    const defaultSet = encodeEventArgs("DefaultProtocolPoolFeeRateSet", { inputFeePips: 25, outputFeePips: 25 });
+    expect(defaultSet.args).toMatchObject({ inputFeePips: 25, outputFeePips: 25 });
 
     const feeRateCleared = encodeEventArgs("ProtocolPoolFeeRateCleared", { poolId });
     expect(feeRateCleared.args).toMatchObject({ poolId });
@@ -1123,10 +1135,9 @@ describe("Statics static basket quotes", () => {
 
   it("exports Robinhood addresses from the generated deployment binding", () => {
     expect(robinhoodChain.chainId).toBe(4_663);
-    expect(robinhoodChain.inputFeeBps).toBe(50);
-    expect(robinhoodChain.outputFeeBps).toBe(50);
+    expect(robinhoodChain.inputFeePips).toBe(500);
+    expect(robinhoodChain.outputFeePips).toBe(500);
     expect(robinhoodChain.hookPermissionMask).toBe("0x10ec");
-    expect(robinhoodChain.liquidityCalibration.canonicalLpFeePips).toBe(3_000);
     expect(robinhoodChain.liquidityCalibration.polShareBps).toBe(1_500);
     expect(robinhoodChain.liquidityCalibration.basketStakerShareBps).toBe(3_000);
     expect(robinhoodChain.liquidityCalibration.staticsStakerShareBps).toBe(3_000);

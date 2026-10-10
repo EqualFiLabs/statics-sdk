@@ -36,8 +36,8 @@ export const robinhoodChain = ${JSON.stringify({
   chainId: manifest.chainId,
   forkBlock: manifest.forkBlock,
   forkBlockHash: manifest.forkBlockHash,
-  inputFeeBps: manifest.staticsLiquidityCalibration.inputFeeBps,
-  outputFeeBps: manifest.staticsLiquidityCalibration.outputFeeBps,
+  inputFeePips: manifest.staticsLiquidityCalibration.inputFeePips,
+  outputFeePips: manifest.staticsLiquidityCalibration.outputFeePips,
   hookPermissionMask: manifest.staticsLiquidityCalibration.hookPermissionMask,
   liquidityCalibration: manifest.staticsLiquidityCalibration,
   contracts: {
