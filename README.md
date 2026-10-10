@@ -134,6 +134,22 @@ and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
 
+On upgraded diamonds, `buildPositionRewardSelectionWithTimingCall(positionId, asset)`
+reads the same effective selection plus its weighted pending start in one RPC.
+Decode with `decodePositionRewardSelectionWithTimingResult`; the result contains
+`selection` and `pendingStartTime` (seconds). The start changes after pending
+top-ups and is not necessarily the first deposit time. It is zero for unselected
+assets or when no stake is effectively pending, even before a maturity bucket is
+rolled by a transaction.
+
+Check ERC-165 support for `STATICS_REWARD_SELECTION_TIMING_INTERFACE_ID` before
+using this getter on an older deployment. The existing selection builder and
+decoder are unchanged. To preview a top-up, cap elapsed pending age at the reward
+eligibility delay, multiply by old pending stake and divide by total pending
+stake with integer truncation, then round the new start plus the delay up to the
+eligibility bucket. Read the selection and chain timestamp at the same block;
+state changes before execution can change the final schedule.
+
 Gauge routing has a separate governed cooldown. Every positive stake ingress
 starts or extends the PositionNFT's allocation deadline. Existing PoolId
 allocations continue earning and may be reduced or removed during that period,

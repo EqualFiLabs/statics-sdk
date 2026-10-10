@@ -40,6 +40,7 @@ const functionNames = [
   "positionRewardAssets",
   "isRewardAssetOptedIn",
   "rewardSelection",
+  "rewardSelectionWithTiming",
   "globalRewardAssetsOfPosition",
 ] as const;
 
