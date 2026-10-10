@@ -161,7 +161,29 @@ export type RangeGaugeManagedPositionMovement = {
   refund1: bigint;
 };
 
+export type LiquidityStatementMovement = {
+  liquidityBefore: bigint;
+  liquidityAfter: bigint;
+  payer: Address;
+  receiver: Address;
+  paid0: bigint;
+  received0: bigint;
+  paid1: bigint;
+  received1: bigint;
+};
+
+export type RebalanceSettlement = {
+  withdrawn0: bigint;
+  withdrawn1: bigint;
+  mintSpent0: bigint;
+  mintReceived0: bigint;
+  mintSpent1: bigint;
+  mintReceived1: bigint;
+};
+
 export const staticsRangeGaugeAbi = parseAbi([
+  "struct LiquidityStatementMovement { uint128 liquidityBefore; uint128 liquidityAfter; address payer; address receiver; uint256 paid0; uint256 received0; uint256 paid1; uint256 received1; }",
+  "struct RebalanceSettlement { uint256 withdrawn0; uint256 withdrawn1; uint256 mintSpent0; uint256 mintReceived0; uint256 mintSpent1; uint256 mintReceived1; }",
   "function setGaugeRewardAssetAllowed(address asset,bool allowed)",
   "function setGaugeRewardDuration(uint40 duration)",
   "function appendPoolRewardAsset(bytes32 poolId,address asset) returns (uint8 slot)",
@@ -200,11 +222,12 @@ export const staticsRangeGaugeAbi = parseAbi([
   "event PoolRewardAllocatorShareSet(bytes32 indexed poolId,uint8 indexed slot,uint16 allocatorShareBps)",
   "event PoolRewardFunded(bytes32 indexed poolId,address indexed asset,address indexed funder,uint8 slot,uint256 received,uint256 lpAmount,uint40 periodFinish)",
   "event PoolAllocatorRewardFunded(bytes32 indexed poolId,address indexed asset,address indexed funder,uint8 slot,uint256 allocatorAmount,uint40 periodFinish)",
-  "event ManagedLiquidityProvided(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
+  "event ManagedLiquidityProvided(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address manager,int24 tickLower,int24 tickUpper,LiquidityStatementMovement movement)",
   "event ManagedLiquidityAttached(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
-  "event ManagedLiquidityChanged(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,uint128 liquidity)",
-  "event ManagedLiquidityRebalanced(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed oldPosmTokenId,uint256 newPosmTokenId,address manager,int24 tickLower,int24 tickUpper,uint128 liquidity)",
-  "event ManagedLiquidityExited(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId)",
+  "event ManagedLiquidityChanged(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,LiquidityStatementMovement movement)",
+  "event ManagedLiquidityRebalanced(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed oldPosmTokenId,uint256 newPosmTokenId,address manager,int24 tickLower,int24 tickUpper,LiquidityStatementMovement movement,RebalanceSettlement settlement)",
+  "event ManagedLiquidityExited(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,LiquidityStatementMovement movement)",
+  "event ManagedLiquidityFeesCollected(uint256 indexed positionId,bytes32 indexed poolId,uint256 indexed posmTokenId,address receiver,uint256 amount0,uint256 amount1)",
   "event LpRewardsClaimed(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,uint8 slot,address receiver,uint256 debited,uint256 received)",
   "event LpRewardForfeited(uint256 indexed positionId,bytes32 indexed poolId,address indexed asset,uint8 slot,uint256 amount)",
   "event UnboundPosmRecovered(address indexed manager,uint256 indexed posmTokenId,address indexed receiver)",
@@ -255,6 +278,7 @@ export type RangeGaugeEventName =
   | "ManagedLiquidityChanged"
   | "ManagedLiquidityRebalanced"
   | "ManagedLiquidityExited"
+  | "ManagedLiquidityFeesCollected"
   | "LpRewardsClaimed"
   | "LpRewardForfeited"
   | "UnboundPosmRecovered"

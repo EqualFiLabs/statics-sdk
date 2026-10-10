@@ -543,3 +543,35 @@ in the companion protocol repository. Copy
 `artifacts/diamond-manifests/aggregated-rewards-solidity.json` and the ABI from
 `out/IStaticsAggregatedBatchRewards.sol/IStaticsAggregatedBatchRewards.json`
 into `test/fixtures/`.
+
+## Non-swap revenue share
+
+`buildNonSwapStakerShareBpsCall` reads the staker share in basis points.
+Governance can use `buildSetNonSwapStakerShareBpsCall(shareBps)` to set a value
+from 0 to 10,000; treasury receives the remainder. The default is 9,000.
+Changes apply to future non-swap accrual only. Revenue still routes entirely to
+treasury when the asset is restricted or has no eligible staking weight.
+This setting does not change a pool's swap-fee split.
+
+### Position statement events
+
+Liquidity events carry `LiquidityStatementMovement`: liquidity before/after, the actual payer
+and receiver, gross payer debits and actual recipient credits in PoolKey currency order.
+Wallet refunds are separate from manager spending. Rebalance also carries
+`RebalanceSettlement` for withdrawn proceeds received internally by the diamond and the
+replacement mint's spend/return. Those internal amounts are not wallet payouts.
+Decrease and exit outputs can include principal and trading fees together.
+
+`ManagedLiquidityFeesCollected` identifies the Position NFT even when the result is zero.
+`PositionGaugeAllocationsSet` contains the exact ordered replacement arrays.
+`RewardClaimed` reports both custody debit and recipient credit, preserving taxed receipts
+on legacy claims. Aggregated claims retain individual attribution and exact final transfers.
+
+These event topics replace the prelaunch signatures; existing function calldata, return
+values and interface IDs remain unchanged. Old logs do not contain the new fields. Consumers
+must use the matching ABI and replay a deployment emitting these events rather than infer
+missing amounts. Solidity fixtures in `test/fixtures/position-statement-*.json` include logs generated
+by protocol `PositionStatementAbiTest` with `WRITE_STATEMENT_FIXTURES=true`. The ABI fixture
+is extracted from the matching compiler interface artifacts (the eight event definitions only);
+the decoding tests
+compare their indexed topics and complete tuple payloads against this SDK.
