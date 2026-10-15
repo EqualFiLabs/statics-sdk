@@ -40,6 +40,9 @@ export const staticsBasketFactoryAbi = parseAbi([
   `function preparation(bytes32 id) view returns ((${intentTuple} intent,bytes32 tokenSalt,bytes32[] hookSalts,bool tokenDeployed,uint256 hookCursor))`,
 ]);
 export const staticsRestrictedMarketsAbi = parseAbi([
+  "function setBasketDistributor(address account,bool allowed)",
+  "function isBasketDistributor(address account) view returns (bool)",
+  "event BasketDistributorSet(address indexed account,bool allowed)",
   "function basketFactory() view returns (address)",
   "function isRestrictedBasketToken(address token) view returns (bool)",
   `function basketCreationConfigurationHash(${basketTuple} params,${poolTuple}[] pools,uint256[] maxAmountsIn,uint256 deadline) view returns (bytes32)`,
@@ -61,6 +64,11 @@ export const staticsFlashArbitrageAbi = parseAbi([
   `function executeBuyAndRedeem(uint256 basketId,uint256 shares,${v4PoolTuple}[] pools,uint256[] constituentAmountsIn,uint256[] minimumProfits,uint256 deadline) returns (address[] assets,uint256[] profits)`,
 ]);
 export type ArbitragePoolKey = { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address };
+
+/** Governance approval shared by all restricted baskets; PoolManager rules still apply. */
+export function encodeSetBasketDistributor(account: Address, allowed: boolean): Hex {
+  return encodeFunctionData({ abi: staticsRestrictedMarketsAbi, functionName: "setBasketDistributor", args: [account, allowed] });
+}
 
 export function encodeDeployBasketArbitrageReceiver(): Hex {
   return encodeFunctionData({abi: staticsRestrictedMarketsAbi, functionName: "deployBasketArbitrageReceiver"});

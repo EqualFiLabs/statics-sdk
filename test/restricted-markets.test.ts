@@ -6,7 +6,7 @@ import {
   hasBasketHookPermissions, mineBasketHookSalts, encodeEnqueueBasketSalts,
   encodeCreateBasketMarket, staticsBasketFactoryAbi, staticsRestrictedMarketsAbi,
   basketCreationConfigurationHash, encodePrepareBasketCreation, encodeCreateBasketPrepared,
-  preparedBasketDeploymentSalt,
+  preparedBasketDeploymentSalt, encodeSetBasketDistributor,
   encodeBasketArbitrage, encodeDeployBasketArbitrageReceiver, staticsFlashArbitrageAbi,
 } from "../src/restricted-markets.js";
 import { installBasketMiningWorker, type HookMiningWorkerPort } from "../src/restricted-markets-worker.js";
@@ -27,6 +27,16 @@ describe("restricted basket identities", () => {
     }, salt, [fixture.hookSalt])).toBe(fixture.preparationId);
     expect(hasBasketHookPermissions(fixture.hookAddress)).toBe(true);
     expect(predictBasketDeployment(factory, 1n, salt).deployed).not.toBe(fixture.tokenAddress);
+  });
+  it("encodes global distributor approval and exposes the registry through the main ABI", () => {
+    for (const allowed of [true, false]) {
+      const data = encodeSetBasketDistributor(fixture.payer, allowed);
+      expect(decodeFunctionData({ abi: staticsRestrictedMarketsAbi, data })).toEqual({
+        functionName: "setBasketDistributor", args: [fixture.payer, allowed],
+      });
+    }
+    expect(staticsRestrictedMarketsAbi.some(item => item.type === "function" && item.name === "isBasketDistributor")).toBe(true);
+    expect(staticsRestrictedMarketsAbi.some(item => item.type === "event" && item.name === "BasketDistributorSet")).toBe(true);
   });
   it("binds raw salt authority and validates entropy", () => {
     expect(() => basketDeploymentSalt(factory, -1n)).toThrow();

@@ -487,3 +487,14 @@ recovery.
 `deployments/robinhood-chain-4663.json` before SDK builds and tests. It is the
 only SDK address binding for Robinhood's PoolManager, PositionManager, StateView,
 Quoter, Universal Router, Permit2, and WETH deployment.
+
+### Restricted basket distributors
+
+Governance uses `encodeSetBasketDistributor(account, allowed)` against the Diamond.
+Read `isBasketDistributor(account)` using `staticsRestrictedMarketsAbi`; changes
+emit `BasketDistributorSet`. Approval applies to all restricted baskets and either
+transfer endpoint may be approved. ERC-20 allowances still apply. Approving only
+a spender does not exempt its transfers, and ownership alone grants no exemption.
+PoolManager settlement authorization always takes precedence. Morpho is approved
+as an ordinary distributor; direct Morpho deposits remain outside tracked Statics
+stake and do not earn its staking yield. Recursive redemption is not added.
