@@ -13,8 +13,8 @@ export const BASKET_FACTORY_VERSION = 1n;
 const MAX_ENTROPY = (1n << 88n) - 1n;
 const PREPARED_SALT_BIT = 1n << 87n;
 const MAX_QUEUE_ENTROPY = PREPARED_SALT_BIT - 1n;
-const basketTuple = "(string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration)";
-const poolTuple = "(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)";
+export const basketTuple = "(string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration)";
+export const poolTuple = "(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)";
 const intentTuple = "(address payer,address creator,bytes32 configurationHash,uint256 deadline,uint256 version)";
 const marketTuple = "(address tokenA,address tokenB,uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceBPerAX96,uint256 maximumCreationFee,uint256 deadline)";
 
