@@ -554,3 +554,14 @@ Restricted campaign currencies require a governance-approved, runtime-pinned
 campaign factory. Approve the Statics Diamond, not the campaign or zap, for
 direct restricted-token funding. Settlement uses exact transaction-local
 custody authorization; approvals alone never authorize arbitrary transfers.
+
+### Restricted basket distributors
+
+Governance uses `encodeSetBasketDistributor(account, allowed)` against the Diamond.
+Read `isBasketDistributor(account)` using `staticsRestrictedMarketsAbi`; changes
+emit `BasketDistributorSet`. Approval applies to all restricted baskets and either
+transfer endpoint may be approved. ERC-20 allowances still apply. Approving only
+a spender does not exempt its transfers, and ownership alone grants no exemption.
+PoolManager settlement authorization always takes precedence. Morpho is approved
+as an ordinary distributor; direct Morpho deposits remain outside tracked Statics
+stake and do not earn its staking yield. Recursive redemption is not added.
