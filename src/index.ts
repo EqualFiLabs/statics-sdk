@@ -486,6 +486,7 @@ export type PoolLaunchParams = {
   tickSpacing: number;
   sqrtPriceAssetPerBasketX96: bigint;
   pairedAssetAmount: bigint;
+  activateManagedPol: boolean;
 };
 
 export type PoolSwapFeeRate = {
@@ -1324,7 +1325,7 @@ export const staticsAbi = [
   ...staticsBatchRewardsAbi,
   ...staticsAggregatedBatchRewardsAbi,
   ...parseAbi([
-  "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
+  "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount,bool activateManagedPol)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
   "function redeem(uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
   "function quoteMint(uint256 basketId,uint256 shares) view returns (uint256[] amountsIn)",
@@ -2641,6 +2642,7 @@ export function buildCreateBasketTransaction(
   maxAmountsIn: readonly bigint[],
   launchDeadline: bigint,
   creationFee: bigint,
+  polActivationFee: bigint,
 ): PreparedTransaction {
   return {
     data: encodeFunctionData({
@@ -2652,7 +2654,7 @@ export function buildCreateBasketTransaction(
         tickSpacing: _validateTickSpacing(pool.tickSpacing),
       })), maxAmountsIn, launchDeadline],
     }),
-    value: creationFee,
+    value: creationFee + pools.reduce((total, pool) => total + (pool.activateManagedPol ? polActivationFee : 0n), 0n),
   };
 }
 
