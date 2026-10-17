@@ -316,12 +316,26 @@ uses `buildSetDefaultProtocolPoolFeeRateCall`,
 The initial 5-BPS-per-side global default applies immediately to every
 non-overridden public pool. A general-pool creator may select a higher rate only
 at creation; the PoolId override builders remain governance-only and work for
-basket and permissionless general pools. Pool creators claim PoolId-local revenue with
+basket and permissionless general pools. Anyone can collect general-pool revenue with
 `buildClaimCreatorRevenueCall(poolId, asset, receiver, minReceived)`, and
 `buildBeginGeneralPoolDecommissionCall` stops the venue and gauge. Protocol POL
 positions are then closed explicitly before
 `buildFinalizeGeneralPoolDecommissionCall` moves remaining protocol inventory
 to Treasury. Neither stage touches user LP NFTs.
+
+For public and permissioned general pools, every claim must pay the effective revenue
+recipient returned by `buildPoolCreatorConfigurationCall` and
+`decodePoolCreatorConfigurationResult`. The creator sets it with
+`buildSetCreatorRevenueRecipientCall`; zero restores the current creator. A recipient
+contract can collect and explicitly fund direct gauge incentives in one transaction.
+
+Creator authority transfers through `buildProposePoolCreatorCall` followed by
+`buildAcceptPoolCreatorCall`, sent by the proposed account. Zero cancels a proposal.
+Acceptance transfers outstanding settled and unsettled creator revenue, clears the custom
+recipient, and invalidates outstanding permissioned configuration signatures. Controller
+authority is unchanged. Index `PoolCreatorTransferred` and `CreatorRevenueRecipientSet`
+and re-read configuration before claiming. Decommissioned pools retain these controls for
+remaining revenue. Basket canonical pools retain their existing creator-only claim behavior.
 
 Canonical pools are usable immediately after atomic basket launch. Creators do
 not configure hook fees during basket or general-pool creation. Basket and
