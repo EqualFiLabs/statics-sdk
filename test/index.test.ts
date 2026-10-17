@@ -1926,6 +1926,15 @@ describe("Statics unified calldata", () => {
     );
   });
 
+  it("decodes permanent basket reward forfeiture", () => {
+    expect(encodeEventArgs("BasketRewardForfeited", {
+      positionId: 17n, basketId: 7n, asset: assetB, amount: 23n,
+    })).toMatchObject({
+      eventName: "BasketRewardForfeited",
+      args: { positionId: 17n, basketId: 7n, asset: assetB, amount: 23n },
+    });
+  });
+
   it("exposes position reward claims and terminal lifecycle calls", () => {
     expect(buildClaimRewardsCall(17n, [assetA, assetB], receiver, [0n, 0n])).toMatch(/^0x[0-9a-f]+$/);
     expect(

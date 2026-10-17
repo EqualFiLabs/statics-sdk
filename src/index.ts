@@ -1693,6 +1693,7 @@ export const staticsAbi = [
   "event BasketRewardAccrued(uint256 indexed basketId,address indexed asset,uint256 amount,uint256 indexRay)",
   "event BasketRewardSettled(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,uint256 amount)",
   "event BasketRewardClaimed(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,address receiver,uint256 amount)",
+  "event BasketRewardForfeited(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,uint256 amount)",
   "event BasketRewardDustRouted(uint256 indexed basketId,address indexed asset,uint256 amount)",
   ]),
   ...staticsRangeGaugeAbi,
@@ -1965,6 +1966,7 @@ export type StaticsLiquidityEventName =
   | "BasketRewardAccrued"
   | "BasketRewardSettled"
   | "BasketRewardClaimed"
+  | "BasketRewardForfeited"
   | "BasketRewardDustRouted";
 
 export type StaticsLiquidityEventArgs<Name extends StaticsLiquidityEventName> =
@@ -1984,6 +1986,7 @@ export type StaticsPositionEventName =
   | "BasketCollateralRedeemed"
   | "BasketRewardSettled"
   | "BasketRewardClaimed"
+  | "BasketRewardForfeited"
   | "StakingPositionCreated"
   | "Staked"
   | "Unstaked"
