@@ -81,7 +81,9 @@ when building a transaction, particularly after supply changes.
 
 `buildCreateBasketTransaction` returns both permissionless creation calldata
 and the native `value` that must accompany it. Callers should read the current
-`creationFee()` from the Diamond immediately before preparing the transaction.
+`creationFee()` and `protocolPolActivationFee()` from the Diamond immediately
+before preparing the transaction and pass both amounts to the builder. Its native
+value includes one activation fee for each pool selecting `activateManagedPol`.
 The creation parameters include flat mint and redemption fee tiers, a basket
 LTV no greater than the immutable 9,500-basis-point protocol maximum, and a
 recovery penalty that fits inside the collateral remaining at that LTV.
@@ -266,12 +268,17 @@ but are authenticated protocol callbacks, not integration entry points.
 
 `buildCreateBasketTransaction` requires one semantic
 constituent-per-BasketToken square-root price, creator-selected static native LP
-fee, tick spacing, paired-asset amount, and measured complete input cap per
+fee, tick spacing, optional paired-asset amount, explicit POL activation choice,
+and measured complete input cap per
 constituent, plus a launch deadline. Prices are ratios of
 raw smallest token units, not decimal-normalized display units. Use
 `encodeSqrtPriceAssetPerBasketX96(assetAmountRaw, basketAmountRaw)` to construct
-them. The creation transaction registers, initializes, backs, and opens the
-initial protocol-owned managed position for every canonical pool. There is no standalone initialization
+them. The creation transaction registers and initializes every canonical pool.
+A zero paired amount initializes without a seed; supply starts at zero when all
+pools are unseeded. Positive paired funding requires `activateManagedPol` and
+backs and opens that pool's protocol-owned managed position. POL activation may
+also be selected without a seed, or paid later by the creator through the existing
+activation function. There is no standalone initialization
 or manager-sync builder. Constituents must settle the exact Uniswap v4 transfer
 amount; incompatible transfer-tax behavior reverts the complete launch.
 

@@ -1752,23 +1752,30 @@ describe("Statics unified calldata", () => {
         loanDuration: 7 * 24 * 60 * 60,
       },
       [
-        { lpFee: 3_000, tickSpacing: 10, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 1n * 10n ** 18n },
-        { lpFee: 500, tickSpacing: 20, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 2n * 10n ** 18n },
+        { lpFee: 3_000, tickSpacing: 10, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 1n * 10n ** 18n, activateManagedPol: true },
+        { lpFee: 500, tickSpacing: 20, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 2n * 10n ** 18n, activateManagedPol: true },
       ],
       [25n * 10n ** 18n, 60n * 10n ** 18n],
       1_900_000_000n,
       1n * 10n ** 18n,
+      25n * 10n ** 15n,
     );
 
     const decoded = decodeFunctionData({ abi: staticsAbi, data: transaction.data });
     expect(decoded.functionName).toBe("createBasket");
     expect(decoded.args[1]).toEqual([
-      { lpFee: 3_000, tickSpacing: 10, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 1n * 10n ** 18n },
-      { lpFee: 500, tickSpacing: 20, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 2n * 10n ** 18n },
+      { lpFee: 3_000, tickSpacing: 10, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 1n * 10n ** 18n, activateManagedPol: true },
+      { lpFee: 500, tickSpacing: 20, sqrtPriceAssetPerBasketX96: Q96, pairedAssetAmount: 2n * 10n ** 18n, activateManagedPol: true },
     ]);
     expect(decoded.args[2]).toEqual([25n * 10n ** 18n, 60n * 10n ** 18n]);
     expect(decoded.args[3]).toBe(1_900_000_000n);
-    expect(transaction.value).toBe(1n * 10n ** 18n);
+    expect(transaction.value).toBe(105n * 10n ** 16n);
+    const unseeded = buildCreateBasketTransaction(decoded.args[0],
+      decoded.args[1].map((pool) => ({ ...pool, pairedAssetAmount: 0n, activateManagedPol: false })),
+      [0n, 0n], 1_900_000_000n, 1n * 10n ** 18n, 25n * 10n ** 15n);
+    expect(unseeded.value).toBe(1n * 10n ** 18n);
+    expect(decodeFunctionData({ abi: staticsAbi, data: unseeded.data }).args[1])
+      .toEqual(decoded.args[1].map((pool) => ({ ...pool, pairedAssetAmount: 0n, activateManagedPol: false })));
   });
 
   it("encodes semantic launch prices from raw token units", () => {
@@ -1917,6 +1924,15 @@ describe("Statics unified calldata", () => {
     expect(STATICS_FLASH_ASSET_CALLBACK_SUCCESS).toBe(
       keccak256(Buffer.from("IStaticsFlashAssetBorrower.onStaticsFlashLoanAsset")),
     );
+  });
+
+  it("decodes permanent basket reward forfeiture", () => {
+    expect(encodeEventArgs("BasketRewardForfeited", {
+      positionId: 17n, basketId: 7n, asset: assetB, amount: 23n,
+    })).toMatchObject({
+      eventName: "BasketRewardForfeited",
+      args: { positionId: 17n, basketId: 7n, asset: assetB, amount: 23n },
+    });
   });
 
   it("exposes position reward claims and terminal lifecycle calls", () => {

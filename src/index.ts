@@ -486,6 +486,7 @@ export type PoolLaunchParams = {
   tickSpacing: number;
   sqrtPriceAssetPerBasketX96: bigint;
   pairedAssetAmount: bigint;
+  activateManagedPol: boolean;
 };
 
 export type PoolSwapFeeRate = {
@@ -1324,9 +1325,16 @@ export const staticsAbi = [
   ...staticsBatchRewardsAbi,
   ...staticsAggregatedBatchRewardsAbi,
   ...parseAbi([
-  "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
+  "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount,bool activateManagedPol)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
   "function redeem(uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
+  "function markBasketAssetImpaired(uint256 basketId,address asset)",
+  "function isBasketAssetImpaired(uint256 basketId,address asset) view returns (bool)",
+  "function redeemImpaired(uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
+  "function redeemImpairedBasketCollateral(uint256 positionId,uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
+  "function quoteRedeemImpaired(uint256 basketId,uint256 shares) view returns (uint256[] amountsOut)",
+  "event BasketAssetImpaired(uint256 indexed basketId,address indexed asset)",
+  "event BasketImpairedRedeemed(uint256 indexed basketId,address indexed owner,address indexed receiver,uint256 shares)",
   "function quoteMint(uint256 basketId,uint256 shares) view returns (uint256[] amountsIn)",
   "function quoteRedeem(uint256 basketId,uint256 shares) view returns (uint256[] amountsOut)",
   "function basket(uint256 basketId) view returns ((address token,address creator,uint8 status,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) result)",
@@ -1685,6 +1693,7 @@ export const staticsAbi = [
   "event BasketRewardAccrued(uint256 indexed basketId,address indexed asset,uint256 amount,uint256 indexRay)",
   "event BasketRewardSettled(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,uint256 amount)",
   "event BasketRewardClaimed(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,address receiver,uint256 amount)",
+  "event BasketRewardForfeited(uint256 indexed positionId,uint256 indexed basketId,address indexed asset,uint256 amount)",
   "event BasketRewardDustRouted(uint256 indexed basketId,address indexed asset,uint256 amount)",
   ]),
   ...staticsRangeGaugeAbi,
@@ -1957,6 +1966,7 @@ export type StaticsLiquidityEventName =
   | "BasketRewardAccrued"
   | "BasketRewardSettled"
   | "BasketRewardClaimed"
+  | "BasketRewardForfeited"
   | "BasketRewardDustRouted";
 
 export type StaticsLiquidityEventArgs<Name extends StaticsLiquidityEventName> =
@@ -1976,6 +1986,7 @@ export type StaticsPositionEventName =
   | "BasketCollateralRedeemed"
   | "BasketRewardSettled"
   | "BasketRewardClaimed"
+  | "BasketRewardForfeited"
   | "StakingPositionCreated"
   | "Staked"
   | "Unstaked"
@@ -2641,6 +2652,7 @@ export function buildCreateBasketTransaction(
   maxAmountsIn: readonly bigint[],
   launchDeadline: bigint,
   creationFee: bigint,
+  polActivationFee: bigint,
 ): PreparedTransaction {
   return {
     data: encodeFunctionData({
@@ -2652,7 +2664,7 @@ export function buildCreateBasketTransaction(
         tickSpacing: _validateTickSpacing(pool.tickSpacing),
       })), maxAmountsIn, launchDeadline],
     }),
-    value: creationFee,
+    value: creationFee + pools.reduce((total, pool) => total + (pool.activateManagedPol ? polActivationFee : 0n), 0n),
   };
 }
 
