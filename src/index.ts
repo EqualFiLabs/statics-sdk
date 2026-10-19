@@ -23,6 +23,7 @@ export * from "./market-tape.js";
 export * from "./position-market.js";
 export * from "./range-gauges.js";
 export * from "./batch-rewards.js";
+export * from "./basket-conversion.js";
 
 export const BPS = 10_000n;
 export const PIPS = 1_000_000n;
