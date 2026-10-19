@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const outputUrl = new URL("../src/generated/robinhoodChain.ts", import.meta.url);
 const configuredManifest = process.env.STATICS_ROBINHOOD_MANIFEST;
-const repositoryManifestUrl = new URL("../deployments/robinhood-chain-4663.json", import.meta.url);
+const repositoryManifestUrl = new URL("../../deployments/robinhood-chain-4663.json", import.meta.url);
 const manifestUrl = configuredManifest
   ? new URL(`file://${resolve(configuredManifest)}`)
   : repositoryManifestUrl;
