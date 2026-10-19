@@ -966,9 +966,9 @@ export function splitSwapFee(
     || shareTotal !== CONFIGURABLE_SHARE_BPS
   ) throw new Error("invalid swap fee split");
   // Carve the fixed creator share first, then apply the configurable profile shares. Fallback policy
-  // mirrors StaticsSwapFeeHook._computeShares: an unavailable basket-staker share routes to POL;
-  // an unavailable Statics-staker share routes to treasury; the creator share never falls back and
-  // treasury absorbs the rounding dust.
+  // mirrors StaticsSwapFeeHook._computeShares: an unavailable basket-staker share routes to POL, or to
+  // treasury when the effective POL share is zero; an unavailable Statics-staker share routes to
+  // treasury; the creator share never falls back and treasury absorbs the rounding dust.
   const creatorAmount = mulDivDown(chargedAmount, CREATOR_SHARE_BPS, BPS);
   let polAmount = mulDivDown(chargedAmount, configuration.polShareBps, BPS);
   let basketStakerAmount = mulDivDown(chargedAmount, configuration.basketStakerShareBps, BPS);
@@ -976,7 +976,8 @@ export function splitSwapFee(
   let treasuryAmount =
     chargedAmount - polAmount - basketStakerAmount - staticsStakerAmount - creatorAmount;
   if (basketStakerAmount !== 0n && !basketStakersEligible) {
-    polAmount += basketStakerAmount;
+    if (configuration.polShareBps !== 0n) polAmount += basketStakerAmount;
+    else treasuryAmount += basketStakerAmount;
     basketStakerAmount = 0n;
   }
   if (!staticsStakersEligible) {
