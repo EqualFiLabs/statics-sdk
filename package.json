@@ -18,6 +18,10 @@
     "./genesis-credit": {
       "types": "./dist/genesis-credit.d.ts",
       "import": "./dist/genesis-credit.js"
+    },
+    "./basket-conversion": {
+      "types": "./dist/basket-conversion.d.ts",
+      "import": "./dist/basket-conversion.js"
     }
   },
   "files": [

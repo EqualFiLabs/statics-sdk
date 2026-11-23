@@ -10,6 +10,8 @@ const request = `(uint256 deadline,uint256 limit,uint256[] routeLimits,bool pres
 const step = `(${key} key,(bool zeroForOne,int256 amountSpecified,uint160 sqrtPriceLimitX96) params,bytes data)`;
 const bounds = "(uint256 maxQuoteIn,uint256 minQuoteOut,uint256 minBasketOut,uint256 deadline)";
 
+export type { V4PoolKey };
+
 export type BasketConversionRoute = Readonly<{
   currencies: readonly Address[];
   pools: readonly V4PoolKey[];
@@ -134,4 +136,113 @@ export async function discoverBasketConversionMarkets(client: PublicClient, diam
   const events = await client.getContractEvents({ address: diamond, abi: staticsBasketConversionAbi,
     eventName: "BasketConversionMarketCreated", args: basketId === undefined ? {} : { basketId }, fromBlock, toBlock });
   return Promise.all(events.map(event => readBasketConversionMarket(client, diamond, event.args.poolId!)));
+}
+
+export const staticsBasketDistributorAbi = parseAbi([
+  "function setBasketDistributor(uint256 basketId,address account,bool allowed)",
+  "function isBasketDistributor(uint256 basketId,address account) view returns (bool)",
+  "event BasketDistributorSet(uint256 indexed basketId,address indexed account,bool allowed)",
+]);
+
+const basketQuoteAbi = parseAbi([
+  "function basket(uint256 basketId) view returns ((address token,address creator,uint8 status,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) result)",
+  "function quoteMint(uint256 basketId,uint256 shares) view returns (uint256[])",
+  "function quoteRedeem(uint256 basketId,uint256 shares) view returns (uint256[])",
+  "function protocolPoolSwapsBlocked(bytes32 poolId) view returns (bool)",
+]);
+const singleQuoteParams = `(${key} poolKey,bool zeroForOne,uint128 exactAmount,bytes hookData)`;
+const conversionQuoterAbi = parseAbi([
+  `function quoteExactInputSingle(${singleQuoteParams} params) returns (uint256 amount,uint256 gasEstimate)`,
+  `function quoteExactOutputSingle(${singleQuoteParams} params) returns (uint256 amount,uint256 gasEstimate)`,
+]);
+
+export type ReviewedBasketConversionMarket = Readonly<{
+  chainId: number;
+  basketId: bigint;
+  poolId: Hex;
+  quote: Address;
+  /** Constituents in the order stored on the Diamond. */
+  assets: readonly Address[];
+  /** A direct quote/constituent pool at each index, or null for the quote asset itself. */
+  pools: readonly (V4PoolKey | null)[];
+}>;
+
+export async function quoteReviewedBasketConversion(
+  client: PublicClient,
+  diamond: Address,
+  quoter: Address,
+  reviewed: ReviewedBasketConversionMarket,
+  mode: "buy" | "sell",
+  shares: bigint,
+  slippageBps: bigint,
+) {
+  if (shares <= 0n || shares >= 1n << 127n) throw new Error("invalid shares");
+  if (slippageBps < 0n || slippageBps > 500n) throw new Error("invalid slippage");
+  if (await client.getChainId() !== reviewed.chainId) throw new Error("wrong conversion chain");
+  const block = await client.getBlock({ blockTag: "latest" });
+  const blockNumber = block.number;
+  const [basketMarket, configuration, blocked, amounts, basket] = await Promise.all([
+    client.readContract({ address: diamond, abi: staticsBasketConversionAbi,
+      functionName: "basketConversionMarket", args: [reviewed.poolId], blockNumber }),
+    client.readContract({ address: diamond, abi: staticsBasketConversionAbi,
+      functionName: "basketConversionConfiguration", blockNumber }),
+    client.readContract({ address: diamond, abi: basketQuoteAbi,
+      functionName: "protocolPoolSwapsBlocked", args: [reviewed.poolId], blockNumber }),
+    client.readContract({ address: diamond, abi: basketQuoteAbi,
+      functionName: mode === "buy" ? "quoteMint" : "quoteRedeem",
+      args: [reviewed.basketId, shares], blockNumber }),
+    client.readContract({ address: diamond, abi: basketQuoteAbi, functionName: "basket",
+      args: [reviewed.basketId], blockNumber }),
+  ]);
+  const same = (left: Address, right: Address) => left.toLowerCase() === right.toLowerCase();
+  if (!basketMarket.active || blocked || basketMarket.basketId !== reviewed.basketId ||
+      basket.status !== 0 || !same(basket.token, basketMarket.basketToken) ||
+      !same(basketMarket.quote, reviewed.quote) || !same(basketMarket.key.hooks, configuration.hook)) {
+    throw new Error("conversion market unavailable");
+  }
+  if (mode === "sell" && !await client.readContract({
+    address: diamond, abi: staticsBasketDistributorAbi, functionName: "isBasketDistributor",
+    args: [reviewed.basketId, configuration.zap], blockNumber,
+  })) throw new Error("conversion sell unavailable");
+  if (amounts.length !== reviewed.assets.length || amounts.length !== reviewed.pools.length ||
+      amounts.length === 0 || amounts.length > 16 || basket.assets.length !== reviewed.assets.length ||
+      basket.assets.some((asset, index) => !same(asset, reviewed.assets[index]))) throw new Error("incomplete constituent routes");
+  const routes = reviewed.assets.map((asset, index): BasketConversionRoute => {
+    const pool = reviewed.pools[index];
+    if (same(asset, reviewed.quote)) {
+      if (pool !== null) throw new Error("quote constituent requires a zero-hop route");
+      return { currencies: [asset], pools: [], hookData: [] };
+    }
+    if (!pool || same(pool.hooks, configuration.hook) ||
+        !((same(pool.currency0, reviewed.quote) && same(pool.currency1, asset)) ||
+          (same(pool.currency1, reviewed.quote) && same(pool.currency0, asset)))) {
+      throw new Error("missing reviewed constituent route");
+    }
+    return { currencies: [reviewed.quote, asset], pools: [pool], hookData: ["0x"] };
+  });
+  const legs = await Promise.all(routes.map(async (route, index) => {
+    const poolKey = route.pools[0];
+    const exactAmount = amounts[index];
+    if (!poolKey || exactAmount === 0n) return exactAmount;
+    if (exactAmount >= 1n << 127n) throw new Error("constituent amount exceeds the swap limit");
+    const input = mode === "buy" ? reviewed.quote : reviewed.assets[index];
+    const { result: [amount] } = await client.simulateContract({
+      address: quoter, abi: conversionQuoterAbi,
+      functionName: mode === "buy" ? "quoteExactOutputSingle" : "quoteExactInputSingle",
+      args: [{ poolKey, zeroForOne: same(poolKey.currency0, input), exactAmount, hookData: "0x" }],
+      blockNumber,
+    });
+    if (amount === 0n) throw new Error("constituent route returned no quote");
+    return amount;
+  }));
+  const total = legs.reduce((acc, amount) => acc + amount, 0n);
+  const bound = (value: bigint) => mode === "buy"
+    ? (value * (10_000n + slippageBps) + 9_999n) / 10_000n
+    : value * (10_000n - slippageBps) / 10_000n;
+  const request: BasketConversionRequest = {
+    deadline: block.timestamp + 120n, limit: bound(total), routeLimits: legs.map(bound), preset: false, routes,
+  };
+  if (request.limit === 0n) throw new Error("conversion quote too small");
+  validateBasketConversionRequest(request);
+  return { blockNumber, total, request, zap: configuration.zap, basketToken: basketMarket.basketToken };
 }

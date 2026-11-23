@@ -65,3 +65,45 @@ describe("basket conversion", () => {
     expect(simulateContract).not.toHaveBeenCalled();
   });
 });
+
+describe("reviewed conversion quotes", () => {
+  it("prices exact-output buys and exact-input sells at one block and preserves the zero-hop leg", async () => {
+    const { quoteReviewedBasketConversion } = await import("../src/basket-conversion.js");
+    const hook = "0x0000000000000000000000000000000000000033" as Address;
+    const reviewed = { chainId: 4663, poolId, basketId: 0n, quote: a, assets: [a, b],
+      pools: [null, base.routes[0].pools[0]] };
+    const simulateContract = vi.fn().mockResolvedValue({ result: [200n, 10n] });
+    const readContract = vi.fn(({ functionName }) => ({
+      basketConversionMarket: { active: true, basketId: 0n, quote: a, basketToken: b, key: { hooks: hook } },
+      basketConversionConfiguration: { hook, zap: hook },
+      basket: { assets: [a, b], token: b, status: 0 },
+      protocolPoolSwapsBlocked: false,
+      isBasketDistributor: true,
+      quoteMint: [100n, 20n],
+      quoteRedeem: [100n, 20n],
+    })[functionName]);
+    const client = { getChainId: async () => 4663, getBlock: async () => ({ number: 500n, timestamp: 10n }),
+      readContract, simulateContract } as unknown as PublicClient;
+
+    const buy = await quoteReviewedBasketConversion(client, a, b, reviewed, "buy", 1n, 100n);
+    expect(buy.total).toBe(300n);
+    expect(buy.request.routeLimits).toEqual([101n, 202n]);
+    expect(buy.request.limit).toBe(303n);
+    expect(buy.request.deadline).toBe(130n);
+    expect(buy.request.routes[0]).toEqual({ currencies: [a], pools: [], hookData: [] });
+    expect(simulateContract).toHaveBeenLastCalledWith(expect.objectContaining({
+      functionName: "quoteExactOutputSingle", blockNumber: 500n, args: [expect.objectContaining({ zeroForOne: true })],
+    }));
+
+    const sell = await quoteReviewedBasketConversion(client, a, b, reviewed, "sell", 1n, 100n);
+    expect(sell.request.limit).toBe(297n);
+    expect(simulateContract).toHaveBeenLastCalledWith(expect.objectContaining({
+      functionName: "quoteExactInputSingle", blockNumber: 500n, args: [expect.objectContaining({ zeroForOne: false })],
+    }));
+    expect(readContract.mock.calls.every(([call]) => call.blockNumber === 500n)).toBe(true);
+    await expect(quoteReviewedBasketConversion(client, a, b, { ...reviewed, pools: [null, null] },
+      "buy", 1n, 100n)).rejects.toThrow("missing reviewed constituent route");
+    await expect(quoteReviewedBasketConversion(client, a, b, { ...reviewed, chainId: 46630 },
+      "sell", 1n, 100n)).rejects.toThrow("wrong conversion chain");
+  });
+});
