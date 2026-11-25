@@ -2680,11 +2680,7 @@ export function buildCreateBasketTransaction(
     data: encodeFunctionData({
       abi: staticsAbi,
       functionName: "createBasket",
-      args: [params, pools.map((pool) => ({
-        ...pool,
-        lpFee: _validateStaticLpFee(pool.lpFee),
-        tickSpacing: _validateTickSpacing(pool.tickSpacing),
-      })), maxAmountsIn, launchDeadline],
+      args: [params, validatedBasketLaunchPools(pools), maxAmountsIn, launchDeadline],
     }),
     value: creationFee + pools.reduce((total, pool) => total + (pool.activateManagedPol ? polActivationFee : 0n), 0n),
   };
@@ -4716,17 +4712,25 @@ export type BasketLaunchTerms = Readonly<{
   deadline: bigint;
 }>;
 
+function validatedBasketLaunchPools(pools: readonly PoolLaunchParams[]): readonly PoolLaunchParams[] {
+  for (const pool of pools) {
+    _validateStaticLpFee(pool.lpFee);
+    _validateTickSpacing(pool.tickSpacing);
+  }
+  return pools;
+}
+
 export function buildBasketCreationConfigurationHashCall(terms: BasketLaunchTerms): Hex {
   return encodeFunctionData({
     abi: staticsAbi,
     functionName: "basketCreationConfigurationHash",
-    args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline],
+    args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline],
   });
 }
 
 export function buildPrepareBasketTokenCall(terms: BasketLaunchTerms, tokenNonce: bigint): Hex {
   return encodeFunctionData({ abi: staticsAbi, functionName: "prepareBasketToken",
-    args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, tokenNonce] });
+    args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, tokenNonce] });
 }
 
 function basketLaunchValue(
@@ -4747,7 +4751,7 @@ export function buildCreatePreparedBasketTransaction(
 ): PreparedTransaction {
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketPrepared",
-      args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, preparationId] }),
+      args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, preparationId] }),
     value: basketLaunchValue(terms, 0, terms.pools.length, creationFee, polActivationFee),
   };
 }
@@ -4758,7 +4762,7 @@ export function buildCreateStagedBasketTransaction(
   const value = basketLaunchValue(terms, 0, count, creationFee, polActivationFee);
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketStaged",
-      args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, preparationId, BigInt(count)] }),
+      args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, preparationId, BigInt(count)] }),
     value,
   };
 }
@@ -4769,7 +4773,7 @@ export function buildContinueBasketLaunchTransaction(
   const value = basketLaunchValue(terms, completed, count, 0n, polActivationFee);
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "continueBasketLaunch",
-      args: [basketId, terms.pools, terms.maxAmountsIn, terms.deadline, BigInt(count)] }),
+      args: [basketId, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, BigInt(count)] }),
     value,
   };
 }

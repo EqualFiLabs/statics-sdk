@@ -84,6 +84,18 @@ describe("Phase 2 basket launch", () => {
     expect(() => buildContinueBasketLaunchTransaction(terms, basketId, -1, 1, 11n)).toThrow("invalid basket launch batch");
   });
 
+  it.each([
+    ["invalid LP fee", { lpFee: 1_000_000 }, "LP fee"],
+    ["invalid tick spacing", { tickSpacing: 0 }, "tick spacing"],
+  ] as const)("rejects %s before binding or executing launch terms", (_name, change, error) => {
+    const invalid = { ...terms, pools: [terms.pools[0], { ...terms.pools[1], ...change }] };
+    expect(() => buildBasketCreationConfigurationHashCall(invalid)).toThrow(error);
+    expect(() => buildPrepareBasketTokenCall(invalid, 9n)).toThrow(error);
+    expect(() => buildCreatePreparedBasketTransaction(invalid, preparationId, 0n, 0n)).toThrow(error);
+    expect(() => buildCreateStagedBasketTransaction(invalid, preparationId, 1, 0n, 0n)).toThrow(error);
+    expect(() => buildContinueBasketLaunchTransaction(invalid, basketId, 0, 1, 0n)).toThrow(error);
+  });
+
   it("rejects native fees and batch values outside uint256", () => {
     const max = (1n << 256n) - 1n;
     expect(() => buildCreatePreparedBasketTransaction(terms, preparationId, -1n, 11n))
