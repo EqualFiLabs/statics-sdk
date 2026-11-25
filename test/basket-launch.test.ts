@@ -84,6 +84,24 @@ describe("Phase 2 basket launch", () => {
     expect(() => buildContinueBasketLaunchTransaction(terms, basketId, -1, 1, 11n)).toThrow("invalid basket launch batch");
   });
 
+  it("rejects native fees and batch values outside uint256", () => {
+    const max = (1n << 256n) - 1n;
+    expect(() => buildCreatePreparedBasketTransaction(terms, preparationId, -1n, 11n))
+      .toThrow("basket creation fee");
+    expect(() => buildCreateStagedBasketTransaction(terms, preparationId, 1, max + 1n, 0n))
+      .toThrow("basket creation fee");
+    expect(() => buildContinueBasketLaunchTransaction(terms, basketId, 1, 1, -1n))
+      .toThrow("POL activation fee");
+    expect(() => buildContinueBasketLaunchTransaction(terms, basketId, 1, 1, max + 1n))
+      .toThrow("POL activation fee");
+    expect(() => buildCreatePreparedBasketTransaction(terms, preparationId, max, 1n))
+      .toThrow("basket launch transaction value");
+
+    const twoActivations = { ...terms, pools: terms.pools.map(pool => ({ ...pool, activateManagedPol: true })) };
+    expect(() => buildContinueBasketLaunchTransaction(twoActivations, basketId, 0, 2, max))
+      .toThrow("basket launch transaction value");
+  });
+
   it("decodes launch progress and cancellation from the compiled event topics", () => {
     const indexedBasket = encodeAbiParameters([{ type: "uint256" }], [basketId]);
     const progressData = encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [1n, 2n]);

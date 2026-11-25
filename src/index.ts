@@ -4729,11 +4729,17 @@ export function buildPrepareBasketTokenCall(terms: BasketLaunchTerms, tokenNonce
     args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, tokenNonce] });
 }
 
-function basketLaunchValue(terms: BasketLaunchTerms, first: number, count: number, fee: bigint): bigint {
+function basketLaunchValue(
+  terms: BasketLaunchTerms, first: number, count: number, creationFee: bigint, polActivationFee: bigint,
+): bigint {
   if (!Number.isSafeInteger(first) || !Number.isSafeInteger(count) || first < 0 || count <= 0 ||
-      first + count > terms.pools.length || fee < 0n) throw new Error("invalid basket launch batch");
-  return terms.pools.slice(first, first + count).reduce(
-    (value, pool) => value + (pool.activateManagedPol ? fee : 0n), 0n);
+      first + count > terms.pools.length) throw new Error("invalid basket launch batch");
+
+  const fee = _validateUint256(polActivationFee, "POL activation fee");
+  const initialValue = _validateUint256(creationFee, "basket creation fee");
+  const value = terms.pools.slice(first, first + count).reduce(
+    (total, pool) => total + (pool.activateManagedPol ? fee : 0n), initialValue);
+  return _validateUint256(value, "basket launch transaction value");
 }
 
 export function buildCreatePreparedBasketTransaction(
@@ -4742,14 +4748,14 @@ export function buildCreatePreparedBasketTransaction(
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketPrepared",
       args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, preparationId] }),
-    value: creationFee + basketLaunchValue(terms, 0, terms.pools.length, polActivationFee),
+    value: basketLaunchValue(terms, 0, terms.pools.length, creationFee, polActivationFee),
   };
 }
 
 export function buildCreateStagedBasketTransaction(
   terms: BasketLaunchTerms, preparationId: Hex, count: number, creationFee: bigint, polActivationFee: bigint,
 ): PreparedTransaction {
-  const value = creationFee + basketLaunchValue(terms, 0, count, polActivationFee);
+  const value = basketLaunchValue(terms, 0, count, creationFee, polActivationFee);
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketStaged",
       args: [terms.params, terms.pools, terms.maxAmountsIn, terms.deadline, preparationId, BigInt(count)] }),
@@ -4760,7 +4766,7 @@ export function buildCreateStagedBasketTransaction(
 export function buildContinueBasketLaunchTransaction(
   terms: BasketLaunchTerms, basketId: bigint, completed: number, count: number, polActivationFee: bigint,
 ): PreparedTransaction {
-  const value = basketLaunchValue(terms, completed, count, polActivationFee);
+  const value = basketLaunchValue(terms, completed, count, 0n, polActivationFee);
   return {
     data: encodeFunctionData({ abi: staticsAbi, functionName: "continueBasketLaunch",
       args: [basketId, terms.pools, terms.maxAmountsIn, terms.deadline, BigInt(count)] }),
