@@ -26,6 +26,12 @@ export type PositionRewardSelection = {
   eligibleAt: number;
 };
 
+export type PositionRewardSelectionWithTiming = {
+  selection: PositionRewardSelection;
+  /** Weighted effective start; zero when no stake is effectively pending. */
+  pendingStartTime: number;
+};
+
 export type PositionAddressPage = {
   assets: readonly Address[];
   nextCursor: bigint;
@@ -36,6 +42,12 @@ export type PositionRoyalty = {
   royaltyBps: number;
 };
 
+const rewardSelectionWithTimingSignature =
+  "function rewardSelectionWithTiming(uint256 positionId,address asset) view returns ((bool selected,uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint40 eligibleAt) selection,uint40 pendingStartTime)";
+
+export const STATICS_REWARD_SELECTION_TIMING_INTERFACE_ID = "0x13cfa782" as const;
+export const staticsRewardSelectionTimingAbi = parseAbi([rewardSelectionWithTimingSignature]);
+
 export const staticsPositionMarketAbi = parseAbi([
   "function royaltyInfo(uint256 tokenId,uint256 salePrice) view returns (address receiver,uint256 royaltyAmount)",
   "function positionRoyalty() view returns (address receiver,uint16 royaltyBps)",
@@ -45,6 +57,7 @@ export const staticsPositionMarketAbi = parseAbi([
   "function positionRewardAssets(uint256 positionId) view returns (address[] assets)",
   "function isRewardAssetOptedIn(uint256 positionId,address asset) view returns (bool)",
   "function rewardSelection(uint256 positionId,address asset) view returns ((bool selected,uint256 eligibleStake,uint256 eligibleWeight,uint256 pendingStake,uint256 pendingWeight,uint40 eligibleAt) selection)",
+  rewardSelectionWithTimingSignature,
   "function globalRewardAssetsOfPosition(uint256 positionId,uint256 cursor,uint256 limit) view returns (address[] assets,uint256 nextCursor)",
   "event PositionRoyaltyUpdated(address indexed receiver,uint16 royaltyBps)",
   "error PositionRoyaltyAlreadyInitialized()",
@@ -131,6 +144,15 @@ export function buildPositionRewardSelectionCall(positionId: bigint, asset: Addr
   });
 }
 
+/** Requires IStaticsRewardSelectionTiming support on the selected diamond. */
+export function buildPositionRewardSelectionWithTimingCall(positionId: bigint, asset: Address): Hex {
+  return encodeFunctionData({
+    abi: staticsRewardSelectionTimingAbi,
+    functionName: "rewardSelectionWithTiming",
+    args: [positionId, asset],
+  });
+}
+
 export function buildGlobalRewardAssetsOfPositionCall(positionId: bigint, cursor: bigint, limit: bigint): Hex {
   validatePage(limit);
   return encodeFunctionData({
@@ -155,6 +177,15 @@ export function decodePositionStakeResult(data: Hex): PositionStake {
 
 export function decodePositionRewardSelectionResult(data: Hex): PositionRewardSelection {
   return decodeFunctionResult({ abi: staticsPositionMarketAbi, functionName: "rewardSelection", data });
+}
+
+export function decodePositionRewardSelectionWithTimingResult(data: Hex): PositionRewardSelectionWithTiming {
+  const [selection, pendingStartTime] = decodeFunctionResult({
+    abi: staticsRewardSelectionTimingAbi,
+    functionName: "rewardSelectionWithTiming",
+    data,
+  });
+  return { selection, pendingStartTime };
 }
 
 export function decodeGlobalRewardAssetsOfPositionResult(data: Hex): PositionAddressPage {

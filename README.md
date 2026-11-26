@@ -70,8 +70,9 @@ liquidity, deposited BasketToken positions, global Statics stakers, the fixed
 5% pool creator, and treasury. The configurable class shares always total 9,500
 basis points and the creator share is a fixed 500. Treasury receives division
 dust. An unavailable basket-staker allocation redirects to protocol-owned
-liquidity; an unavailable Statics-staker allocation redirects to treasury; the
-creator share never falls back.
+liquidity when its effective share is nonzero and to treasury when it is zero.
+An unavailable Statics-staker allocation redirects to treasury. The creator
+share never falls back.
 
 ## Phase 2 baskets and conversion
 
@@ -156,6 +157,22 @@ mature stake remains eligible. Read `rewardSelection` for the exact timestamp
 and pending/eligible split. The next fee or position
 interaction rolls due buckets automatically, so integrations never submit a
 separate activation transaction.
+
+On upgraded diamonds, `buildPositionRewardSelectionWithTimingCall(positionId, asset)`
+reads the same effective selection plus its weighted pending start in one RPC.
+Decode with `decodePositionRewardSelectionWithTimingResult`; the result contains
+`selection` and `pendingStartTime` (seconds). The start changes after pending
+top-ups and is not necessarily the first deposit time. It is zero for unselected
+assets or when no stake is effectively pending, even before a maturity bucket is
+rolled by a transaction.
+
+Check ERC-165 support for `STATICS_REWARD_SELECTION_TIMING_INTERFACE_ID` before
+using this getter on an older deployment. The existing selection builder and
+decoder are unchanged. To preview a top-up, cap elapsed pending age at the reward
+eligibility delay, multiply by old pending stake and divide by total pending
+stake with integer truncation, then round the new start plus the delay up to the
+eligibility bucket. Read the selection and chain timestamp at the same block;
+state changes before execution can change the final schedule.
 
 Gauge routing has a separate governed cooldown. Every positive stake ingress
 starts or extends the PositionNFT's allocation deadline. Existing PoolId
@@ -344,12 +361,26 @@ uses `buildSetDefaultProtocolPoolFeeRateCall`,
 The initial 5-BPS-per-side global default applies immediately to every
 non-overridden public pool. A general-pool creator may select a higher rate only
 at creation; the PoolId override builders remain governance-only and work for
-basket and permissionless general pools. Pool creators claim PoolId-local revenue with
+basket and permissionless general pools. Anyone can collect general-pool revenue with
 `buildClaimCreatorRevenueCall(poolId, asset, receiver, minReceived)`, and
 `buildBeginGeneralPoolDecommissionCall` stops the venue and gauge. Protocol POL
 positions are then closed explicitly before
 `buildFinalizeGeneralPoolDecommissionCall` moves remaining protocol inventory
 to Treasury. Neither stage touches user LP NFTs.
+
+For public and permissioned general pools, every claim must pay the effective revenue
+recipient returned by `buildPoolCreatorConfigurationCall` and
+`decodePoolCreatorConfigurationResult`. The creator sets it with
+`buildSetCreatorRevenueRecipientCall`; zero restores the current creator. A recipient
+contract can collect and explicitly fund direct gauge incentives in one transaction.
+
+Creator authority transfers through `buildProposePoolCreatorCall` followed by
+`buildAcceptPoolCreatorCall`, sent by the proposed account. Zero cancels a proposal.
+Acceptance transfers outstanding settled and unsettled creator revenue, clears the custom
+recipient, and invalidates outstanding permissioned configuration signatures. Controller
+authority is unchanged. Index `PoolCreatorTransferred` and `CreatorRevenueRecipientSet`
+and re-read configuration before claiming. Decommissioned pools retain these controls for
+remaining revenue. Basket canonical pools retain their existing creator-only claim behavior.
 
 Canonical pools are usable immediately after atomic basket launch. Creators do
 not configure hook fees during basket or general-pool creation. Basket and
@@ -390,7 +421,8 @@ the checked-in Robinhood defaults are 3,000 native-fee pips and 50 hook-fee
 basis points on each leg. `splitSwapFee` carves the fixed 5% creator share first,
 then applies the pool-class allocation among protocol-owned liquidity,
 basket-stakers where applicable, global Statics stakers, and treasury. An
-unavailable basket-staker share routes to protocol-owned liquidity, an
+unavailable basket-staker share routes to protocol-owned liquidity (or to
+treasury when the effective POL share is zero), an
 unavailable Statics-staker share routes to treasury, the creator share never
 falls back, and treasury absorbs rounding dust. Activated POL shares accumulate
 as claim-backed, PoolId-local inventory until permissionless settlement into
