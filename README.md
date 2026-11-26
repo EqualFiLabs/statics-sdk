@@ -369,7 +369,8 @@ the checked-in Robinhood defaults are 3,000 native-fee pips and 50 hook-fee
 basis points on each leg. `splitSwapFee` carves the fixed 5% creator share first,
 then applies the pool-class allocation among protocol-owned liquidity,
 basket-stakers where applicable, global Statics stakers, and treasury. An
-unavailable basket-staker share routes to protocol-owned liquidity, an
+unavailable basket-staker share routes to protocol-owned liquidity (or to
+treasury when the effective POL share is zero), an
 unavailable Statics-staker share routes to treasury, the creator share never
 falls back, and treasury absorbs rounding dust. Activated POL shares accumulate
 as claim-backed, PoolId-local inventory until permissionless settlement into

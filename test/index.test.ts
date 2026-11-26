@@ -480,6 +480,31 @@ describe("Statics static basket quotes", () => {
     });
   });
 
+  it("routes an unavailable basket-staker share to treasury when the effective POL share is zero", () => {
+    const configuration = {
+      inputFeePips: 25n,
+      outputFeePips: 25n,
+      polShareBps: 0n,
+      basketStakerShareBps: 3_000n,
+      staticsStakerShareBps: 3_000n,
+      treasuryShareBps: 3_500n,
+    };
+    expect(splitSwapFee(101n, configuration, false, true)).toEqual({
+      polAmount: 0n,
+      basketStakerAmount: 0n,
+      staticsStakerAmount: 30n,
+      creatorAmount: 5n,
+      treasuryAmount: 66n,
+    });
+    expect(splitSwapFee(101n, configuration, false, false)).toEqual({
+      polAmount: 0n,
+      basketStakerAmount: 0n,
+      staticsStakerAmount: 0n,
+      creatorAmount: 5n,
+      treasuryAmount: 96n,
+    });
+  });
+
   it("rejects swap fee splits whose configurable shares do not total 9500 BPS", () => {
     expect(() => splitSwapFee(100n, {
       inputFeePips: 25n,
