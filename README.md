@@ -70,17 +70,39 @@ liquidity, deposited BasketToken positions, global Statics stakers, the fixed
 5% pool creator, and treasury. The configurable class shares always total 9,500
 basis points and the creator share is a fixed 500. Treasury receives division
 dust. An unavailable basket-staker allocation redirects to protocol-owned
-liquidity; an unavailable Statics-staker allocation redirects to treasury; the
-creator share never falls back.
+liquidity when its effective share is nonzero and to treasury when it is zero.
+An unavailable Statics-staker allocation redirects to treasury. The creator
+share never falls back.
+
+## Phase 2 baskets and conversion
 
 `quoteMint` and `quoteRedeem` select the greatest qualifying static fee tier
-and reproduce the aggregate-supply rounding used onchain. They do not model a
-historical fee-pot buy-in: basket fees accrue in-kind against the single global
-staking balance. Treat onchain `quoteMint` and `quoteRedeem` as authoritative
-when building a transaction, particularly after supply changes.
+and reproduce the aggregate-supply rounding used onchain. Use the Diamond's
+quotes when building transactions against current supply. Mint and redemption
+fees accrue in constituent assets. Governance sets one staker share per basket
+with `buildSetBasketMintRedemptionStakerShareBpsCall`. That share defaults to
+100%, with the remainder going to Treasury. Treasury receives the full fee
+when the basket has no eligible stake or the constituent is reward-restricted.
 
-`buildCreateBasketTransaction` returns both permissionless creation calldata
-and the native `value` that must accompany it. Callers should read the current
+Use `buildBasketCreationConfigurationHashCall` to check the exact launch terms,
+then `buildPrepareBasketTokenCall` to prepare the token. After verifying the
+token, finalize it with `buildCreatePreparedBasketTransaction`, or use
+`buildCreateStagedBasketTransaction` and `buildContinueBasketLaunchTransaction`
+for bounded batches. Only the first creation transaction pays the basket fee.
+Each batch pays the POL activation fee only for the pools it activates.
+
+The `@statics-protocol/sdk/basket-conversion` entry point prices USDG-funded
+exact basket output buys and exact basket input sells. Supply a reviewed market
+for the target chain and one direct v4 PoolKey per constituent, ordered as on
+the Diamond. Use `null` for USDG itself. `quoteReviewedBasketConversion` reads and
+prices the legs at the same block, returns per-leg and total bounds, and sets a
+deadline. Verify the returned zap against the deployment manifest, then approve
+only the quoted maximum USDG input or exact basket input. Simulate from the
+actual payer after approval and obtain a fresh quote if it expires or the
+reviewed bounds fail. Governance can authorize or revoke a zap for a single
+basket with `buildSetBasketDistributorCall`.
+
+`buildCreateBasketTransaction` returns basket creation calldata and the native `value` that must accompany it. Callers should read the current
 `creationFee()` and `protocolPolActivationFee()` from the Diamond immediately
 before preparing the transaction and pass both amounts to the builder. Its native
 value includes one activation fee for each pool selecting `activateManagedPol`.

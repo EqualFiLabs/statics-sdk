@@ -16,6 +16,7 @@ import { staticsRangeGaugeAbi } from "./range-gauges.js";
 import { staticsGaugeIncentivesAbi } from "./gauge-incentives.js";
 import { staticsMarketTapeAbi, staticsSwapCallbackAbi } from "./market-tape.js";
 import { staticsPositionMarketAbi } from "./position-market.js";
+import { staticsBasketDistributorAbi } from "./basket-conversion.js";
 import { staticsPoolCreatorAbi } from "./pool-creators.js";
 
 export { robinhoodChain } from "./generated/robinhoodChain.js";
@@ -1325,11 +1326,31 @@ export function allowsExposureIncrease(status: BasketStatus): boolean {
   return status === BasketStatus.Active;
 }
 
+const basketLaunchParamsAbi = "(string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration)";
+const basketLaunchPoolsAbi = "(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount,bool activateManagedPol)[]";
+const basketLaunchTermsAbi = `${basketLaunchParamsAbi} params,${basketLaunchPoolsAbi} pools,uint256[] maxAmountsIn,uint256 launchDeadline`;
+
 export const staticsAbi = [
   ...staticsBatchRewardsAbi,
   ...staticsAggregatedBatchRewardsAbi,
+  ...staticsBasketDistributorAbi,
   ...parseAbi([
-  "function createBasket((string name,string symbol,address[] assets,uint256[] bundleAmounts,(uint256 minActionShares,uint256 feeShares)[] mintFeeTiers,(uint256 minActionShares,uint256 feeShares)[] redemptionFeeTiers,uint16 flashFeeBps,uint16 originationFeeBps,uint16 extensionFeeBps,uint16 ltvBps,uint16 recoveryPenaltyBps,uint40 loanDuration) params,(uint24 lpFee,int24 tickSpacing,uint160 sqrtPriceAssetPerBasketX96,uint256 pairedAssetAmount,bool activateManagedPol)[] pools,uint256[] maxAmountsIn,uint256 launchDeadline) payable returns (uint256 basketId,address token)",
+  `function createBasket(${basketLaunchTermsAbi}) payable returns (uint256 basketId,address token)`,
+  `function prepareBasketToken(${basketLaunchTermsAbi},uint256 tokenNonce) returns (bytes32 preparationId,uint256 basketId,address token)`,
+  `function createBasketPrepared(${basketLaunchTermsAbi},bytes32 preparationId) payable returns (uint256 basketId,address token)`,
+  `function createBasketStaged(${basketLaunchTermsAbi},bytes32 preparationId,uint256 poolCount) payable returns (uint256 basketId,address token)`,
+  `function continueBasketLaunch(uint256 basketId,${basketLaunchPoolsAbi} pools,uint256[] maxAmountsIn,uint256 launchDeadline,uint256 poolCount) payable`,
+  "function basketLaunchProgress(uint256 basketId) view returns (uint256 completedPools,uint256 basketShares,uint256[] assetDebits)",
+  "function preparedBasketContracts(bytes32 preparationId) view returns (uint256 basketId,address token,bool finalized)",
+  "function cancelBasketLaunch(uint256 basketId)",
+  `function basketCreationConfigurationHash(${basketLaunchTermsAbi}) pure returns (bytes32)`,
+  "event BasketLaunchProgress(uint256 indexed basketId,uint256 completedPools,uint256 totalPools)",
+  "event BasketLaunchCancelled(uint256 indexed basketId)",
+  "function setBasketMintRedemptionStakerShareBps(uint256 basketId,uint16 shareBps)",
+  "function basketMintRedemptionStakerShareBps(uint256 basketId) view returns (uint16)",
+  "event BasketMintRedemptionStakerShareSet(uint256 indexed basketId,uint16 previousShareBps,uint16 newShareBps)",
+  "error InvalidBasketMintRedemptionStakerShareBps(uint16 shareBps)",
+  "event PreparedBasketTokenDeployed(bytes32 indexed preparationId,uint256 indexed basketId,address token)",
   "function mint(uint256 basketId,uint256 shares,address receiver,uint256[] maxAmountsIn) returns (uint256[] amountsIn)",
   "function redeem(uint256 basketId,uint256 shares,address receiver,uint256[] minAmountsOut) returns (uint256[] amountsOut)",
   "function markBasketAssetImpaired(uint256 basketId,address asset)",
@@ -2675,11 +2696,7 @@ export function buildCreateBasketTransaction(
     data: encodeFunctionData({
       abi: staticsAbi,
       functionName: "createBasket",
-      args: [params, pools.map((pool) => ({
-        ...pool,
-        lpFee: _validateStaticLpFee(pool.lpFee),
-        tickSpacing: _validateTickSpacing(pool.tickSpacing),
-      })), maxAmountsIn, launchDeadline],
+      args: [params, validatedBasketLaunchPools(pools), maxAmountsIn, launchDeadline],
     }),
     value: creationFee + pools.reduce((total, pool) => total + (pool.activateManagedPol ? polActivationFee : 0n), 0n),
   };
@@ -4682,4 +4699,97 @@ export function buildNonSwapStakerShareBpsCall(): Hex {
 
 export function decodeNonSwapStakerShareBpsResult(data: Hex): number {
   return decodeFunctionResult({ abi: staticsAbi, functionName: "nonSwapStakerShareBps", data });
+}
+
+/** Set the share of subsequent mint and redemption fees paid to eligible basket stakers. */
+export function buildSetBasketMintRedemptionStakerShareBpsCall(basketId: bigint, shareBps: number): Hex {
+  if (!Number.isInteger(shareBps) || shareBps < 0 || shareBps > Number(BPS)) {
+    throw new Error("Basket mint and redemption staker share must be an integer from 0 to 10000 basis points.");
+  }
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "setBasketMintRedemptionStakerShareBps",
+    args: [basketId, shareBps],
+  });
+}
+
+export function buildBasketMintRedemptionStakerShareBpsCall(basketId: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "basketMintRedemptionStakerShareBps", args: [basketId] });
+}
+
+export function decodeBasketMintRedemptionStakerShareBpsResult(data: Hex): number {
+  return decodeFunctionResult({ abi: staticsAbi, functionName: "basketMintRedemptionStakerShareBps", data });
+}
+
+export type BasketLaunchTerms = Readonly<{
+  params: CreateBasketParams;
+  pools: readonly PoolLaunchParams[];
+  maxAmountsIn: readonly bigint[];
+  deadline: bigint;
+}>;
+
+function validatedBasketLaunchPools(pools: readonly PoolLaunchParams[]): readonly PoolLaunchParams[] {
+  for (const pool of pools) {
+    _validateStaticLpFee(pool.lpFee);
+    _validateTickSpacing(pool.tickSpacing);
+  }
+  return pools;
+}
+
+export function buildBasketCreationConfigurationHashCall(terms: BasketLaunchTerms): Hex {
+  return encodeFunctionData({
+    abi: staticsAbi,
+    functionName: "basketCreationConfigurationHash",
+    args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline],
+  });
+}
+
+export function buildPrepareBasketTokenCall(terms: BasketLaunchTerms, tokenNonce: bigint): Hex {
+  return encodeFunctionData({ abi: staticsAbi, functionName: "prepareBasketToken",
+    args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, tokenNonce] });
+}
+
+function basketLaunchValue(
+  terms: BasketLaunchTerms, first: number, count: number, creationFee: bigint, polActivationFee: bigint,
+): bigint {
+  if (!Number.isSafeInteger(first) || !Number.isSafeInteger(count) || first < 0 || count <= 0 ||
+      first + count > terms.pools.length) throw new Error("invalid basket launch batch");
+
+  const fee = _validateUint256(polActivationFee, "POL activation fee");
+  const initialValue = _validateUint256(creationFee, "basket creation fee");
+  const value = terms.pools.slice(first, first + count).reduce(
+    (total, pool) => total + (pool.activateManagedPol ? fee : 0n), initialValue);
+  return _validateUint256(value, "basket launch transaction value");
+}
+
+export function buildCreatePreparedBasketTransaction(
+  terms: BasketLaunchTerms, preparationId: Hex, creationFee: bigint, polActivationFee: bigint,
+): PreparedTransaction {
+  return {
+    data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketPrepared",
+      args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, preparationId] }),
+    value: basketLaunchValue(terms, 0, terms.pools.length, creationFee, polActivationFee),
+  };
+}
+
+export function buildCreateStagedBasketTransaction(
+  terms: BasketLaunchTerms, preparationId: Hex, count: number, creationFee: bigint, polActivationFee: bigint,
+): PreparedTransaction {
+  const value = basketLaunchValue(terms, 0, count, creationFee, polActivationFee);
+  return {
+    data: encodeFunctionData({ abi: staticsAbi, functionName: "createBasketStaged",
+      args: [terms.params, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, preparationId, BigInt(count)] }),
+    value,
+  };
+}
+
+export function buildContinueBasketLaunchTransaction(
+  terms: BasketLaunchTerms, basketId: bigint, completed: number, count: number, polActivationFee: bigint,
+): PreparedTransaction {
+  const value = basketLaunchValue(terms, completed, count, 0n, polActivationFee);
+  return {
+    data: encodeFunctionData({ abi: staticsAbi, functionName: "continueBasketLaunch",
+      args: [basketId, validatedBasketLaunchPools(terms.pools), terms.maxAmountsIn, terms.deadline, BigInt(count)] }),
+    value,
+  };
 }
