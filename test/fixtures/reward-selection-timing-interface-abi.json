@@ -1,0 +1,63 @@
+[
+  {
+    "type": "function",
+    "name": "rewardSelectionWithTiming",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "selection",
+        "type": "tuple",
+        "internalType": "struct IStaticsGlobalRewards.RewardSelectionView",
+        "components": [
+          {
+            "name": "selected",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "eligibleStake",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "eligibleWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingStake",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingWeight",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "eligibleAt",
+            "type": "uint40",
+            "internalType": "uint40"
+          }
+        ]
+      },
+      {
+        "name": "pendingStartTime",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]
